@@ -323,7 +323,7 @@
       <div class="sidebar-top" style="padding:12px 14px;border-bottom:1px solid var(--border);">
         <button onclick="exitToItemsMenu()" style="width:100%;padding:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;font-weight:600;font-size:12px;cursor:pointer;margin-bottom:12px;">← Back to items</button>
       </div>
-      <div class="sidebar-top">
+      <div id="legacyTextSearchBlock" class="sidebar-top">
         <h2>Text search</h2>
       <div style="display:flex;gap:6px;margin-bottom:6px;">
         <input type="text" id="textSearchInput" placeholder="Search text on drawing..." style="flex:1;font-size:13px;padding:7px 10px;border:1px solid #ddd;border-radius:8px;background:#fafaf8;" />
@@ -345,7 +345,8 @@
           <div style="font-size:10px;color:#888;margin-top:2px;">✓ Detail photo attached</div>
         </div>
       </div>
-      <div style="border-top:1px solid #eee;padding-top:10px;margin-top:4px;">
+      </div><!-- end legacyTextSearchBlock -->
+      <div id="legacyTemplateMatchBlock" class="sidebar-top" style="border-top:1px solid #eee;padding-top:10px;margin-top:4px;">
       <h2>Template matching</h2>
       <p>Zoom in, select one symbol, clean it up, then find all matches.</p>
       <div class="query-wrap">
@@ -354,9 +355,8 @@
           Step 1 — Select one example symbol ↗
         </button>
       </div>
-      </div><!-- end template matching inner wrap -->
-      </div><!-- end sidebar-top within sidebarOriginal -->
-    </div><!-- end sidebarOriginal -->
+      </div><!-- end legacyTemplateMatchBlock -->
+      </div><!-- end sidebarOriginal -->
     <div class="status" id="status"></div>
     <div class="error-msg" id="errorMsg"></div>
     <div class="instr-banner yellow" id="instrSelect">
@@ -462,7 +462,7 @@
           <span id="threshVal">10%</span>
         </div>
         <div class="hint">Lower = finds more · Higher = stricter</div>
-        <button class="step-btn" id="vectorBtn" onclick="(async ()=>{await prepareTextFilterForSearch();runVectorScan();})()" style="margin-top:8px;background:#0F6E56;">
+        <button class="step-btn" id="vectorBtn" onclick="runVectorScanForItem()" style="margin-top:8px;background:#0F6E56;">
           ⬡ Vector scan — find by geometry (most accurate)
         </button>
         <div class="hint">Reads PDF paths directly · no pixel matching · instant</div>

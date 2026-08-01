@@ -213,7 +213,10 @@ function renderItemsList() {
         <div style="display:flex;gap:5px;margin-bottom:9px;">
           ${ITEM_COLORS.map(c => `<span onclick="setItemColor(${item.id},'${c}')" style="width:17px;height:17px;border-radius:4px;background:${c};cursor:pointer;border:2px solid ${c === item.color ? 'var(--text)' : 'transparent'};box-sizing:border-box;"></span>`).join('')}
         </div>
-        <button onclick="startMethodManualMarkup()" style="width:100%;padding:9px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">✎ ${n ? 'Mark up more' : 'Mark Up'}</button>
+        <div style="display:flex;gap:6px;">
+          <button onclick="startMethodManualMarkup()" style="flex:1;padding:9px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">✎ ${n ? 'More' : 'Manual'}</button>
+          <button onclick="startMethodTemplateMatching()" style="flex:1;padding:9px;background:#0F6E56;color:#fff;border:none;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">🔍 Vector Scan</button>
+        </div>
         ${n ? `<div style="max-height:120px;overflow-y:auto;margin-top:8px;">${item.boxes.map((b, i) => `
           <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text2);padding:3px 6px;background:var(--surface2);border-radius:4px;margin-bottom:3px;">
             <span style="flex:1;">Markup ${i + 1} · ${Math.round(b.w)}×${Math.round(b.h)}</span>
@@ -396,29 +399,91 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.preventDefault(); cancelManualMarkup(); }
 });
 
-// ── PARKED: other markup methods (kept for later integration) ─────────
+// ── PARKED: text search (not yet wired into the item flow) ────────────
 function startMethodTextSearch() {
   if (!currentSelectedItem) return;
   const el = document.getElementById('textSearchInput');
   if (el) el.value = currentSelectedItem.name;
+  document.getElementById('legacyTextSearchBlock').style.display = 'block';
+  document.getElementById('legacyTemplateMatchBlock').style.display = 'none';
   document.getElementById('sidebarOriginal').style.display = 'block';
   document.getElementById('itemsManagementUI').style.display = 'none';
   showStatus(`Text search for "${currentSelectedItem.name}"`);
 }
 
+// ── Vector Scan method — template capture + sensitivity slider are the
+// same underlying code as before; only the results step changed from a
+// sidebar list + one-by-one review modal to click-a-suggestion-to-add. ──
+let isInVectorReviewMode = false;
+
 function startMethodTemplateMatching() {
   if (!currentSelectedItem) return;
+  if (isInManualMarkupMode) finishManualMarkup();
   const el = document.getElementById('queryInput');
   if (el) el.value = currentSelectedItem.name;
+  document.getElementById('legacyTextSearchBlock').style.display = 'none';
+  document.getElementById('legacyTemplateMatchBlock').style.display = 'block';
   document.getElementById('sidebarOriginal').style.display = 'block';
   document.getElementById('itemsManagementUI').style.display = 'none';
-  showStatus(`Template matching for "${currentSelectedItem.name}"`);
+  showStatus(`Vector scan for "${currentSelectedItem.name}" — drag a box around one example on the sheet.`);
+}
+
+async function runVectorScanForItem() {
+  if (!currentSelectedItem) return;
+  await prepareTextFilterForSearch();
+  await runVectorScan();
+  // Show every match as a clickable suggestion, regardless of the
+  // auto-detected confidence cutoff — there's no toggle UI in this flow.
+  _showBelowCutoff = true;
+  // Suppress the legacy sidebar-list/keep-reject results UI; suggestions
+  // are reviewed by clicking them directly on the sheet instead.
+  const findingsWrapEl = document.getElementById('findingsWrap');
+  if (findingsWrapEl) findingsWrapEl.style.display = 'none';
+  const bottomBarEl = document.getElementById('bottomBar');
+  if (bottomBarEl) bottomBarEl.classList.remove('visible');
+  const qs = document.getElementById('qaqcSection');
+  if (qs) qs.style.display = 'none';
+  const vb = document.getElementById('verifyBtn');
+  if (vb) vb.style.display = 'none';
+  const rb = document.getElementById('reviewBtn');
+  if (rb) rb.style.display = 'none';
+
+  isInVectorReviewMode = true;
+  drawMarkers();
+  showStatus(`${findings.length} suggestion${findings.length !== 1 ? 's' : ''} found for "${currentSelectedItem.name}" — click one on the sheet to add it.`);
+}
+
+// Hit-tests a canvas-space click against the live findings[] suggestions.
+// On a hit: removes it from findings (so it stops being drawn as a
+// suggestion) and adds it as a real box on the current item — mirrors the
+// exact write path manual markup already uses.
+function handleVectorSuggestionClick(c) {
+  if (!isInVectorReviewMode || !currentSelectedItem || !findings.length) return;
+  const TW = templateCanvas ? templateCanvas.width : 40;
+  const TH = templateCanvas ? templateCanvas.height : 40;
+  let bestIdx = -1, bestDist = Infinity;
+  findings.forEach((f, i) => {
+    if (Math.abs(c.x - f.x) <= TW * 0.6 && Math.abs(c.y - f.y) <= TH * 0.6) {
+      const d = Math.hypot(c.x - f.x, c.y - f.y);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+  });
+  if (bestIdx < 0) return;
+  const f = findings[bestIdx];
+  findings.splice(bestIdx, 1);
+  currentSelectedItem.boxes.push({ x: f.x - TW / 2, y: f.y - TH / 2, w: TW, h: TH });
+  if (currentSelectedItem.inSession) syncSessionFromItems();
+  drawMarkers();
+  showStatus(`${currentSelectedItem.boxes.length} added to "${currentSelectedItem.name}" — ${findings.length} suggestion${findings.length !== 1 ? 's' : ''} left.`);
 }
 
 function exitToItemsMenu() {
+  isInVectorReviewMode = false;
   document.getElementById('sidebarOriginal').style.display = 'none';
   document.getElementById('itemsManagementUI').style.display = 'block';
+  if (currentSelectedItem && currentSelectedItem.inSession) syncSessionFromItems();
   renderItemsList();
+  drawMarkers();
 }
 
 function openNewItemMenu() { openNewItemModal(); }
@@ -1389,8 +1454,13 @@ zoomViewport.addEventListener('pointercancel',onPointerUp);
 function vpToCanvas(cx,cy){const r=zoomViewport.getBoundingClientRect();return{x:(cx-r.left-panX)/scale,y:(cy-r.top-panY)/scale};}
 function canvasToVp(cx,cy){return{x:cx*scale+panX,y:cy*scale+panY};}
 
+let _vecClickDownPt=null;
 function onPointerDown(e){
   if(e.touches&&e.touches.length>1)return;
+
+  // Track where a vector-suggestion click started (in screen coords) —
+  // panning still works normally; onPointerUp decides if this was a click.
+  if(isInVectorReviewMode) _vecClickDownPt={x:e.clientX,y:e.clientY};
 
   // ── Detail: resize handle drag ──
   if(activePlacement){
@@ -1526,6 +1596,13 @@ function onPointerUp(e){
     else captureTemplate();
   }
   else if(isPanning){isPanning=false;zoomContent.classList.remove('panning');zoomViewport.style.cursor=(mode==='selecting'||mode==='region'||mode==='placing')?'crosshair':(activePlacement?'default':'grab');zoomViewport.classList.toggle('selecting',mode==='selecting'||mode==='region'||mode==='placing');}
+
+  // ── Vector suggestions: a click (not a drag/pan) accepts one ──
+  if(isInVectorReviewMode&&_vecClickDownPt){
+    const moved=Math.hypot(e.clientX-_vecClickDownPt.x,e.clientY-_vecClickDownPt.y);
+    if(moved<6) handleVectorSuggestionClick(vpToCanvas(e.clientX,e.clientY));
+    _vecClickDownPt=null;
+  }
 }
 function updateSelBand(){
   if(!selStart||!selEnd)return;
