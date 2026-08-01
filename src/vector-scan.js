@@ -3563,6 +3563,32 @@ function promptAiQuestionsChoice(){
 }
 
 
+// Extracts the first balanced {...} object from Claude's response text.
+// A plain /\{[\s\S]*\}/ regex is greedy — it matches from the first "{" to
+// the LAST "}" anywhere in the response, so any trailing note the model
+// adds after the JSON (or a stray "}" mentioned in prose) gets swallowed
+// into the "JSON" and breaks JSON.parse. This tracks brace depth (and
+// skips over quoted strings, so braces inside answer text don't count)
+// and stops at the first object that actually balances.
+function extractFirstJsonObject(text){
+  const start=text.indexOf('{');
+  if(start<0) return null;
+  let depth=0, inStr=false, esc=false;
+  for(let i=start;i<text.length;i++){
+    const ch=text[i];
+    if(inStr){
+      if(esc) esc=false;
+      else if(ch==='\\') esc=true;
+      else if(ch==='"') inStr=false;
+      continue;
+    }
+    if(ch==='"'){ inStr=true; continue; }
+    if(ch==='{') depth++;
+    else if(ch==='}'){ depth--; if(depth===0) return text.slice(start,i+1); }
+  }
+  return null;
+}
+
 async function createQaqcTemplate(){
   if(qaqcSession.length===0){ showError('No scans added to session yet.'); return; }
 
@@ -3697,9 +3723,9 @@ Every circle number must appear in exactly one type.`});
       if(tc){ tc.style.display='block'; tc.textContent=`${modelLabel}: ${totalInTok.toLocaleString()} in · ${totalOutTok.toLocaleString()} out · $${costUSD.toFixed(5)}`; }
 
       const rawText=apiData.content?.[0]?.text?.trim()||'';
-      const jsonMatch=rawText.match(/\{[\s\S]*\}/);
-      if(!jsonMatch) throw new Error(`No JSON in AI response for "${s.query}": `+rawText.slice(0,200));
-      const scanData=JSON.parse(jsonMatch[0]);
+      const jsonStr=extractFirstJsonObject(rawText);
+      if(!jsonStr) throw new Error(`No JSON in AI response for "${s.query}": `+rawText.slice(0,200));
+      const scanData=JSON.parse(jsonStr);
 
       // ── Apply this item's types immediately — scoped to this scan only ──
       Object.keys(scanData).forEach(k=>{ if(Array.isArray(scanData[k])) scanData[k]={circles:scanData[k]}; });
@@ -3761,9 +3787,9 @@ Respond ONLY with valid JSON: {"calloutName": ["Q1?","Q2?","Q3?","Q4?"], ...}`}]
         if(tqResp.ok){
           const tqData=await tqResp.json();
           const tqText=tqData.content?.[0]?.text?.trim()||'';
-          const tqMatch=tqText.match(/\{[\s\S]*\}/);
-          if(tqMatch){
-            const tqJson=JSON.parse(tqMatch[0]);
+          const tqJsonStr=extractFirstJsonObject(tqText);
+          if(tqJsonStr){
+            const tqJson=JSON.parse(tqJsonStr);
             textScans.forEach(s=>{
               s.types=[{type:s.query,autoNamed:true,count:s.findingsCount,
                 questions:tqJson[s.query]||tqJson[Object.keys(tqJson).find(k=>k.toLowerCase()===s.query.toLowerCase())]||[]}];
