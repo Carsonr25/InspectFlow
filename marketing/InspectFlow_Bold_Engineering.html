@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InspectFlow - Construction Inspection Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --dark-bg: #0a0a0a;
+            --darker-bg: #0f0f0f;
+            --accent: #ff6b35;
+            --text-light: #f5f5f5;
+            --text-muted: #999;
+            --border-color: #222;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--dark-bg);
+            color: var(--text-light);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* Header */
+        header {
+            background: rgba(10, 10, 10, 0.95);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.5rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.3rem;
+            font-weight: 900;
+            color: var(--text-light);
+            letter-spacing: -0.5px;
+            text-decoration: none;
+        }
+
+        .logo-accent {
+            color: var(--accent);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 3rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-light);
+        }
+
+        .btn {
+            padding: 0.75rem 1.75rem;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #ff5520;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-light);
+            border: 2px solid var(--accent);
+        }
+
+        .btn-secondary:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 8rem 0;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            border-bottom: 1px solid var(--border-color);
+            border-left: 4px solid var(--accent);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(255, 107, 53, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 900px;
+        }
+
+        .hero-tagline {
+            color: var(--accent);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            font-weight: 900;
+            margin-bottom: 1.5rem;
+            line-height: 1.1;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, #f5f5f5 0%, #f5f5f5 70%, #ff6b35 70%, #ff6b35 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            margin-bottom: 2.5rem;
+            line-height: 1.8;
+            max-width: 600px;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        /* Solution Section */
+        .solution {
+            padding: 6rem 0;
+            background: var(--darker-bg);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .section-header {
+            margin-bottom: 4rem;
+        }
+
+        .section-header h2 {
+            font-size: 2.8rem;
+            font-weight: 900;
+            margin-bottom: 1rem;
+            letter-spacing: -0.5px;
+        }
+
+        .section-header p {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            max-width: 700px;
+            line-height: 1.8;
+        }
+
+        .solution-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 3rem;
+        }
+
+        .solution-card {
+            background: rgba(30, 30, 30, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 2.5rem;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .solution-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent);
+        }
+
+        .solution-card:hover {
+            border-color: var(--accent);
+            background: rgba(30, 30, 30, 0.8);
+        }
+
+        .solution-card h3 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text-light);
+        }
+
+        .solution-card p {
+            color: var(--text-muted);
+            line-height: 1.7;
+        }
+
+        /* Workflow Section */
+        .workflow {
+            padding: 6rem 0;
+            background: linear-gradient(135deg, #0a0a0a 0%, #151515 100%);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .workflow-header h2 {
+            font-size: 2.8rem;
+            font-weight: 900;
+            margin-bottom: 1rem;
+        }
+
+        .workflow-steps {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .workflow-step {
+            text-align: center;
+        }
+
+        .step-number {
+            width: 60px;
+            height: 60px;
+            background: var(--accent);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 1.8rem;
+            margin: 0 auto 1.5rem;
+            color: white;
+        }
+
+        .workflow-step h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .workflow-step p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* Key Value Section */
+        .key-value {
+            padding: 6rem 0;
+            background: var(--darker-bg);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .value-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .value-content h2 {
+            font-size: 2.8rem;
+            font-weight: 900;
+            margin-bottom: 2.5rem;
+            line-height: 1.2;
+            letter-spacing: -0.5px;
+        }
+
+        .value-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .value-item {
+            padding-left: 2rem;
+            position: relative;
+        }
+
+        .value-item::before {
+            content: '▸';
+            position: absolute;
+            left: 0;
+            color: var(--accent);
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .value-item h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .value-item p {
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .value-image {
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(255, 107, 53, 0.05));
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 3rem;
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            text-align: center;
+            font-size: 3rem;
+        }
+
+        /* Features Section */
+        .features {
+            padding: 6rem 0;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .feature-card {
+            background: rgba(30, 30, 30, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 2rem;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--accent);
+            background: rgba(30, 30, 30, 0.8);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: var(--accent);
+        }
+
+        .feature-card h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .feature-card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* CTA Section */
+        .cta {
+            padding: 6rem 0;
+            background: var(--darker-bg);
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .cta h2 {
+            font-size: 3rem;
+            font-weight: 900;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.5px;
+        }
+
+        .cta p {
+            font-size: 1.15rem;
+            color: var(--text-muted);
+            margin-bottom: 2.5rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Footer */
+        footer {
+            background: rgba(5, 5, 5, 0.9);
+            border-top: 1px solid var(--border-color);
+            padding: 3rem 0;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+            .section-header h2 {
+                font-size: 2rem;
+            }
+            .solution-grid,
+            .value-grid {
+                grid-template-columns: 1fr;
+            }
+            .workflow-steps,
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+            .hero-buttons {
+                flex-direction: column;
+            }
+            .btn {
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <nav>
+                <a href="#" class="logo">INSPECT<span class="logo-accent">FLOW</span></a>
+                <ul class="nav-links">
+                    <li><a href="#solution">Solution</a></li>
+                    <li><a href="#features">Features</a></li>
+                </ul>
+                <button class="btn btn-primary">Get Demo</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1>Your Complete Inspection Platform</h1>
+                <p>Make sure your project engineers are spending time doing actual QAQC, not organizing photos, doing redundant markups, and busy work. InspectFlow handles the overhead so your team can focus on what matters.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Solution Section -->
+    <section class="solution" id="solution">
+        <div class="container">
+            <div class="section-header">
+                <h2>The Complete Platform</h2>
+                <p>Everything your team needs to capture, organize, analyze, and report. Built for construction teams by people who understand construction.</p>
+            </div>
+            <div class="solution-grid">
+                <div class="solution-card">
+                    <h3>Quick Markups</h3>
+                    <p>Create markups directly on plans. No duplicate work. Each markup tied to an exact location on the drawing.</p>
+                </div>
+                <div class="solution-card">
+                    <h3>Fast Inspections</h3>
+                    <p>Capture photos and notes on-site. Auto-attach to marked locations. No messy camera roll. Everything organized automatically.</p>
+                </div>
+                <div class="solution-card">
+                    <h3>Intelligent Analysis</h3>
+                    <p>Automatically reads plan details, identifies key elements, splits findings by type, and generates your QA/QC checklist instantly.</p>
+                </div>
+                <div class="solution-card">
+                    <h3>Clean Reports</h3>
+                    <p>One-click reports showing what's working, what needs attention, and exactly where. Professional, organized, complete.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- Key Value Section -->
+    <section class="key-value">
+        <div class="container">
+            <div class="value-grid">
+                <div class="value-content">
+                    <h2>Engineers Inspect. We Handle the Rest.</h2>
+                    <div class="value-list">
+                        <div class="value-item">
+                            <h3>Mark Plans in Seconds</h3>
+                            <p>Huge, complicated plans. Marked up completely in seconds. Not minutes or hours. Speed at scale.</p>
+                        </div>
+                        <div class="value-item">
+                            <h3>Quicker Markups & Inspections</h3>
+                            <p>Create location-based markups with photos, notes, and status in seconds. No redundant work. No plan re-reading.</p>
+                        </div>
+                        <div class="value-item">
+                            <h3>Organized, Not Chaotic</h3>
+                            <p>Photos and notes auto-organize by location and type. No cluttered camera roll. No confusion about what goes where.</p>
+                        </div>
+                        <div class="value-item">
+                            <h3>Smart Plan Analysis</h3>
+                            <p>Automatically reads construction plans, splits findings by type, and generates your QA/QC checklist. No manual interpretation.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="value-image">⚙</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="container">
+            <div class="section-header">
+                <h2>Complete Inspection Suite</h2>
+                <p>Every capability your team needs, built into one platform.</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">◉</div>
+                    <h3>Intelligent Plan Analysis</h3>
+                    <p>Automatically reads construction plans, identifies details, and generates inspection checklists in seconds.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">✓</div>
+                    <h3>Location-Based Markups</h3>
+                    <p>Create markups tied to exact locations. Add photos, notes, and pass/fail status tied directly to findings.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⊡</div>
+                    <h3>On-Site Inspections</h3>
+                    <p>Work offline on jobsites. Capture photos and notes that automatically sync to their marked locations when online.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⊙</div>
+                    <h3>Team Collaboration</h3>
+                    <p>Assign inspections, share findings in real-time, and keep everyone aligned from office to jobsite.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⬡</div>
+                    <h3>Auto-Organized Records</h3>
+                    <p>All photos, notes, and findings organize by type and location automatically. Find anything instantly.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⊞</div>
+                    <h3>Smart Report Generation</h3>
+                    <p>Create professional reports showing what's working and what needs fixing. Organized by issue type and severity.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta">
+        <div class="container">
+            <h2>Ready to take control of your inspections?</h2>
+            <p>Give your engineers their time back. Start with InspectFlow today.</p>
+            <button class="btn btn-primary">Get Started Today</button>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 InspectFlow. Built for construction teams by people who understand construction.</p>
+        </div>
+    </footer>
+</body>
+</html>
