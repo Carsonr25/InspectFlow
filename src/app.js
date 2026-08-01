@@ -147,6 +147,7 @@ function confirmNewItem() {
     color: nextItemColor(),
     boxes: [],
     inSession: false,
+    manualDetails: '',
     createdAt: new Date().toLocaleString()
   };
 
@@ -187,6 +188,13 @@ function setItemColor(itemId, color) {
   const sw = document.getElementById('markupModeSwatch');
   if (sw && currentSelectedItem && currentSelectedItem.id === itemId) sw.style.background = color;
   drawMarkers();
+}
+
+function updateItemDetails(itemId, value) {
+  const it = inspectionItems.find(i => i.id === itemId);
+  if (!it) return;
+  it.manualDetails = value;
+  if (it.inSession) syncSessionFromItems();
 }
 
 function renderItemsList() {
@@ -234,6 +242,10 @@ function renderItemsList() {
             <span style="flex:1;">Markup ${i + 1} · ${Math.round(b.w)}×${Math.round(b.h)}</span>
             <button onclick="deleteBox(${item.id},${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:0;line-height:1;">✕</button>
           </div>`).join('')}</div>` : ''}
+        <div style="margin-top:8px;">
+          <div style="font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Details <span style="font-weight:400;text-transform:none;color:var(--text3);">(optional — for anything not in the legend)</span></div>
+          <textarea onchange="updateItemDetails(${item.id},this.value)" placeholder="e.g. 5/8&quot; anchor rod, 8&quot; embedment, per S2.1 note 4" style="width:100%;min-height:50px;font-size:11px;padding:7px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;color:var(--text);resize:vertical;box-sizing:border-box;">${_esc(item.manualDetails || '')}</textarea>
+        </div>
         ${n ? (item.inSession
           ? `<div style="margin-top:8px;text-align:center;font-size:11px;font-weight:600;color:#0F6E56;padding:7px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;">✓ In session</div>`
           : `<button onclick="addItemToSession(${item.id})" style="width:100%;margin-top:8px;padding:9px;background:#0F6E56;color:#fff;border:none;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">+ Add to Session</button>`
@@ -302,7 +314,8 @@ function syncSessionFromItems() {
     timestamp: new Date().toLocaleString(),
     isManualMarkup: true,
     color: i.color,
-    itemId: i.id
+    itemId: i.id,
+    manualNote: (i.manualDetails || '').trim()
   }));
   qaqcSession = others.concat(manual);
   renderSessionSummary();

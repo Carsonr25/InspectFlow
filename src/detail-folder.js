@@ -536,7 +536,12 @@ Return ONLY valid JSON, no markdown, no explanation:
     descriptions.forEach(d => {
       qaqcSession.forEach(scan => {
         (scan.types || []).forEach(t => {
-          if ((t.typeKey || t.type) === d.typeKey) t.description = d.description;
+          // Append rather than overwrite — t.description may already hold a
+          // manually-typed note from the item's markup-mode Details field,
+          // and that should never get silently clobbered by the AI's guess.
+          if ((t.typeKey || t.type) === d.typeKey) {
+            t.description = t.description ? `${t.description} ${d.description}` : d.description;
+          }
         });
       });
     });

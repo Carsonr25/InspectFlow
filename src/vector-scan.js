@@ -3650,7 +3650,7 @@ async function createQaqcTemplate(){
       // type if the user says no, or if there's only one markup anyway.
       const shouldSort = s.findingsSnap.length>1 && await askShouldSortItem(s.query, s.findingsSnap.length);
       if(!shouldSort){
-        s.types=[{type:s.query,typeKey:'1',autoNamed:true,count:s.findingsSnap.length,questions:[]}];
+        s.types=[{type:s.query,typeKey:'1',autoNamed:true,count:s.findingsSnap.length,questions:[],description:s.manualNote||''}];
         if(s.findingsSnap) s.findingsSnap.forEach(f=>{ f.typeKey='1'; f.typeColor=TYPE_COLORS[0]; f.typeIndex=0; });
         if(s.baseImg&&s.findingsSnap&&s.templateSize){
           s.markedUpImg=await renderColoredMarkedImg(s.baseImg,s.findingsSnap,s.templateSize.w,s.templateSize.h);
@@ -3793,10 +3793,11 @@ Every circle number must appear in exactly one type.`});
           typeKey: typeKey,
           autoNamed: !aiName && isGenericKey,
           count:(scanData[typeKey].circles||[]).length,
-          questions:scanData[typeKey].questions||[]
+          questions:scanData[typeKey].questions||[],
+          description: s.manualNote||''
         };
       });
-      if(s.types.length===0) s.types=[{type:s.query,typeKey:'1',autoNamed:true,count:s.findingsCount,questions:[]}];
+      if(s.types.length===0) s.types=[{type:s.query,typeKey:'1',autoNamed:true,count:s.findingsCount,questions:[],description:s.manualNote||''}];
       if(s.findingsSnap){
         s.types.forEach(t=>{
           const actual=s.findingsSnap.filter(f=>f.typeKey===t.typeKey).length;
