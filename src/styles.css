@@ -291,6 +291,17 @@
   .assign-member-email { font-size:13px; color:var(--text); }
   .assign-cancel { width:100%; margin-top:12px; padding:8px; background:none; border:1.5px solid var(--border); border-radius:8px; font-size:13px; cursor:pointer; font-family:inherit; color:var(--text2); }
 
+  /* ── New item modal ── */
+  #newItemOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9000; display:none; align-items:center; justify-content:center; }
+  #newItemOverlay.open { display:flex; }
+  .newitem-card { background:var(--surface); border-radius:16px; padding:24px; width:min(360px,90vw); box-shadow:0 8px 32px rgba(0,0,0,0.18); }
+  .newitem-title { font-size:16px; font-weight:700; color:var(--text); margin-bottom:4px; }
+  .newitem-sub { font-size:12px; color:var(--text2); margin-bottom:16px; }
+  .newitem-input { width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:13px; color:var(--text); font-family:inherit; outline:none; box-sizing:border-box; }
+  .newitem-input:focus { border-color:var(--navy); }
+  .newitem-create { width:100%; margin-top:14px; padding:10px; background:var(--navy); color:#fff; border:none; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; }
+  .newitem-cancel { width:100%; margin-top:8px; padding:8px; background:none; border:1.5px solid var(--border); border-radius:8px; font-size:13px; cursor:pointer; font-family:inherit; color:var(--text2); }
+
   /* ── DB setup modal ── */
   #dbSetupOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9100; display:none; align-items:center; justify-content:center; }
   #dbSetupOverlay.open { display:flex; }

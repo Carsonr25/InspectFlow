@@ -13,6 +13,17 @@
 </head>
 <body>
 
+<!-- New item modal -->
+<div id="newItemOverlay">
+  <div class="newitem-card">
+    <div class="newitem-title">New item</div>
+    <div class="newitem-sub">What are you marking up? e.g. <b>Hold Downs</b>, <b>Anchors</b>, <b>Welds</b></div>
+    <input type="text" id="newItemNameInput" class="newitem-input" placeholder="Item name" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmNewItem();}" />
+    <button class="newitem-create" onclick="confirmNewItem()">Create</button>
+    <button class="newitem-cancel" onclick="closeNewItemModal()">Cancel</button>
+  </div>
+</div>
+
 <!-- Template editor modal -->
 <div class="template-modal" id="templateModal">
   <div class="template-modal-inner">
@@ -258,7 +269,7 @@
         <div id="sessionCountBadge" style="display:none;font-size:10px;font-weight:700;color:#0F6E56;background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:2px 8px;"></div>
       </div>
 
-      <button id="newItemBtn" onclick="promptForNewItem()" style="width:100%;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-weight:600;font-size:12px;cursor:pointer;margin-bottom:12px;">+ New Item</button>
+      <button id="newItemBtn" onclick="openNewItemModal()" style="width:100%;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-weight:600;font-size:12px;cursor:pointer;margin-bottom:12px;">+ New Item</button>
 
       <!-- Items -->
       <div id="itemsList" style="display:none;margin-bottom:12px;"></div>

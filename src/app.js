@@ -100,9 +100,23 @@ function nextItemColor(){
   return ITEM_COLORS.find(c=>!used.includes(c)) || ITEM_COLORS[inspectionItems.length % ITEM_COLORS.length];
 }
 
-function promptForNewItem() {
+function openNewItemModal() {
   if (isInManualMarkupMode) finishManualMarkup();
-  const name = prompt('What are you marking up?\n(e.g., Hold Downs, Anchors, Welds)');
+  const overlay = document.getElementById('newItemOverlay');
+  const input = document.getElementById('newItemNameInput');
+  if (input) input.value = '';
+  if (overlay) overlay.classList.add('open');
+  if (input) setTimeout(() => input.focus(), 0);
+}
+
+function closeNewItemModal() {
+  const overlay = document.getElementById('newItemOverlay');
+  if (overlay) overlay.classList.remove('open');
+}
+
+function confirmNewItem() {
+  const input = document.getElementById('newItemNameInput');
+  const name = input ? input.value : '';
   if (!name || !name.trim()) return;
 
   const item = {
@@ -116,6 +130,7 @@ function promptForNewItem() {
 
   inspectionItems.push(item);
   currentSelectedItem = item;
+  closeNewItemModal();
   renderItemsList();
   showStatus(`"${item.name}" added — hit Mark Up to start boxing them.`);
 }
@@ -384,7 +399,7 @@ function exitToItemsMenu() {
   renderItemsList();
 }
 
-function openNewItemMenu() { promptForNewItem(); }
+function openNewItemMenu() { openNewItemModal(); }
 function setupManualMarkupMode() {}
 function attachManualMarkupHandlers() {}
 function renderMarkupsList() { updateMarkupModeCount(); }

@@ -2013,9 +2013,14 @@ function drawMarkers(highlightIdx=-1){
       if (!item.boxes || !item.boxes.length) return;
       const isSel = currentSelectedItem && currentSelectedItem.id === item.id;
       octx.strokeStyle = item.color;
+      octx.fillStyle = item.color;
       octx.lineWidth = isSel ? 4 : 3;
-      octx.globalAlpha = isSel ? 1 : 0.85;
-      item.boxes.forEach(b => octx.strokeRect(b.x, b.y, b.w, b.h));
+      item.boxes.forEach(b => {
+        octx.globalAlpha = isSel ? 0.28 : 0.18;
+        octx.fillRect(b.x, b.y, b.w, b.h);
+        octx.globalAlpha = isSel ? 1 : 0.85;
+        octx.strokeRect(b.x, b.y, b.w, b.h);
+      });
       octx.globalAlpha = 1;
     });
   }
@@ -3557,18 +3562,6 @@ function promptAiQuestionsChoice(){
   document.getElementById('aiQuestionsChoiceOverlay').style.display='flex';
 }
 
-// The AI echoes scan names back as JSON keys; tolerate case/space/partial drift
-function _lookupScanData(allData,query){
-  if(!allData||!query) return null;
-  if(allData[query]) return allData[query];
-  const want=String(query).trim().toLowerCase();
-  const keys=Object.keys(allData);
-  let k=keys.find(k=>String(k).trim().toLowerCase()===want);
-  if(k) return allData[k];
-  k=keys.find(k=>{ const a=String(k).trim().toLowerCase(); return a.includes(want)||want.includes(a); });
-  if(k) return allData[k];
-  return (keys.length===1)?allData[keys[0]]:null;
-}
 
 async function createQaqcTemplate(){
   if(qaqcSession.length===0){ showError('No scans added to session yet.'); return; }
@@ -3582,24 +3575,33 @@ async function createQaqcTemplate(){
   hideError();
 
   try{
-    // ── AI call: legend + per-scan crops grid ──
-    const msgContent=[];
+    // ── AI calls: one focused request PER ITEM, so items never mix ──
+    // (Previously all items were bundled into one giant call with a shared
+    // instruction to "sort each scan independently" — with a fast/cheap model
+    // and many images in one context, that's exactly where cross-item
+    // contamination creeps in. One call per item makes separation structural
+    // instead of relying on the model following instructions.)
 
     // Legend first (if captured) — only use detail images from TEMPLATE scans, never text search
     const legendSession=qaqcSession.find(s=>!s.isTextSearch&&s.detailImg);
-    if(legendSession){
-      msgContent.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:legendSession.detailImg.split(',')[1]}});
-      msgContent.push({type:'text',text:'LEGEND IMAGE: The detail legend / keynote schedule. Read it to identify all symbol type designators (e.g. 1, 2, 3 or A, B, C).'});
-    }
 
-    // Individual crops per finding — full-res, wide padding so type labels are fully visible
-    let scanIdx=0;
-    for(let i=0;i<qaqcSession.length;i++){
-      const s=qaqcSession[i];
-      if(s.isTextSearch) continue; // text search scans have no baseImg — skip
-      if(!s.baseImg){ console.warn('[QAQC] no sheet image for scan, skipping crops:',s.query); continue; }
-      scanIdx++;
-      msgContent.push({type:'text',text:`--- Scan ${scanIdx}: "${s.query}" — ${s.findingsSnap.length} symbols below, each labeled with its circle number. ---`});
+    const templateScans=qaqcSession.filter(s=>!s.isTextSearch&&s.baseImg);
+    const aiModel=(document.getElementById('aiModelSelect')?.value)||'claude-haiku-4-5-20251001';
+    const isSonnet=aiModel.includes('sonnet');
+    const modelLabel=isSonnet?'Sonnet':'Haiku';
+    let totalInTok=0, totalOutTok=0;
+    const tc=document.getElementById('tokenCounter');
+
+    for(let scanIdx=0;scanIdx<templateScans.length;scanIdx++){
+      const s=templateScans[scanIdx];
+      showStatus(`Sending "${s.query}" to Claude for analysis… (${scanIdx+1}/${templateScans.length})`,true);
+
+      const scanMsgContent=[];
+      if(legendSession){
+        scanMsgContent.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:legendSession.detailImg.split(',')[1]}});
+        scanMsgContent.push({type:'text',text:'LEGEND IMAGE: The detail legend / keynote schedule. Read it to identify all symbol type designators (e.g. 1, 2, 3 or A, B, C).'});
+      }
+
       const baseImgEl=await new Promise(res=>{
         const img=new Image();
         img.onload=()=>res(img);
@@ -3608,6 +3610,7 @@ async function createQaqcTemplate(){
         img.src=s.baseImg;
       });
       if(!baseImgEl){ console.warn('[QAQC] sheet image failed to load, skipping:',s.query); continue; }
+
       // ── Crop tuning ──
       // PAD_RATIO: extra context around each box, as a fraction of the box size
       //   per side. 0.35 keeps the nearby type designator in frame while letting
@@ -3616,10 +3619,7 @@ async function createQaqcTemplate(){
       //   around 1568px, so 1100 is near the useful ceiling without wasting tokens.
       const PAD_RATIO=0.35, TARGET_PX=1100, MAX_UPSCALE=10;
       const TW=s.templateSize.w, TH=s.templateSize.h;
-      const pad=Math.max(TW,TH)*PAD_RATIO;
-      const cropW=Math.round(TW+pad*2), cropH=Math.round(TH+pad*2);
       const maxPx=TARGET_PX;
-      const scale=Math.max(maxPx/cropW, maxPx/cropH);
       const maxCrops=25; // safety cap — beyond this fall back to grid
       // Crop from the live canvas when it's the same sheet: avoids re-compressing
       // an already-lossy JPEG snapshot.
@@ -3627,6 +3627,7 @@ async function createQaqcTemplate(){
                      pdfCanvas.width===baseImgEl.naturalWidth&&
                      pdfCanvas.height===baseImgEl.naturalHeight)?pdfCanvas:baseImgEl;
       const snaps=s.findingsSnap.slice(0,maxCrops);
+      scanMsgContent.push({type:'text',text:`${s.findingsSnap.length} symbols below, each labeled with its circle number.`});
       snaps.forEach((f,fi)=>{
         // Manual markups carry their own box size — crop each to its own bounds
         const fw=f.w||TW, fh=f.h||TH;
@@ -3641,21 +3642,13 @@ async function createQaqcTemplate(){
         const sy=Math.max(0,Math.round(f.y-fh/2-fpad));
         ccx.drawImage(cropSrc,sx,sy,cW,cH,0,0,cc.width,cc.height);
         const cropB64=cc.toDataURL('image/jpeg',0.95).split(',')[1];
-        msgContent.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:cropB64}});
-        msgContent.push({type:'text',text:`Circle #${fi+1}`});
+        scanMsgContent.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:cropB64}});
+        scanMsgContent.push({type:'text',text:`Circle #${fi+1}`});
       });
-    }
 
-    const templateScans=qaqcSession.filter(s=>!s.isTextSearch);
-    const scanList=templateScans.map((s,i)=>`Scan ${i+1}: "${s.query}" (${s.findingsCount} symbols, circles numbered 1 to ${s.findingsCount})`).join('\n');
-    msgContent.push({type:'text',text:`Construction drawing QAQC — ${templateScans.length} scan(s):
-${scanList}
+      scanMsgContent.push({type:'text',text:`You are sorting circled symbols found on a construction drawing, all belonging to the item type "${s.query}" — ${snaps.length} symbol(s) above, each labeled with its circle number.
 
-CRITICAL: Each scan is a DIFFERENT item category. Sort each scan INDEPENDENTLY. Do NOT assume scan 2 has the same types as scan 1.
-
-YOUR JOB: sort the circles in each scan into TYPES, so identical items land in the same type and different items land in different types.
-
-For EACH scan separately:
+YOUR JOB: sort the circles into TYPES, so identical items land in the same type and different items land in different types.
 
 STEP 1 — Examine every crop. Two things distinguish one type from another:
   (a) A printed designator on or beside the symbol — a number or letter such as 1, 2, 3, 4 or A, B, C. A hold-down stamped "4" is type 4.
@@ -3665,39 +3658,77 @@ STEP 2 — Group circles showing the SAME item into one type. Circles that diffe
 
 STEP 3 — Key each type by its printed designator when one exists, using the bare character ("4", not "Type 4"). If no designator is visible, key the types "1", "2", "3"… in the order you encounter them.
 
-STEP 4 — Give every type a short descriptive name in "name" saying what the item actually is, using the detail legend if one was provided. Examples: "Type 4 Hold Down", "HDU8 Hold Down", "Double-bolt Anchor". If you genuinely cannot tell, fall back to the scan name.
+STEP 4 — Give every type a short descriptive name in "name" saying what the item actually is, using the detail legend if one was provided. Examples: "Type 4 Hold Down", "HDU8 Hold Down", "Double-bolt Anchor". If you genuinely cannot tell, fall back to "${s.query}".
 
-STEP 5 — Every circle number must appear in exactly one type for its scan.
+STEP 5 — Every circle number must appear in exactly one type.
 
 ${includeAIQuestions&&legendSession?'For each type, write up to 5 specific field inspection questions grounded in the detail legend image provided. Use the detail to understand what the symbol represents (connections, fasteners, clearances, materials, embedment, etc.) and write questions a structural or site inspector would ask when verifying that item in the field. Do not make up product names or specification numbers that are not visible — but DO write practical questions based on what the detail shows.':'Leave the questions array empty [] for every type — the user has not provided a detail image.'}
 
 Respond with ONLY valid JSON, no explanation or markdown:
-{"ScanQueryName":{"4":{"name":"Type 4 Hold Down","circles":[1,3,5],"questions":["Q1?"]},"6":{"name":"Type 6 Hold Down","circles":[2,4],"questions":["Q1?"]}},"OtherScanName":{"1":{"name":"Cast-in Anchor","circles":[1,2,3],"questions":[]}}}
+{"4":{"name":"Type 4 Hold Down","circles":[1,3,5],"questions":["Q1?"]},"6":{"name":"Type 6 Hold Down","circles":[2,4],"questions":["Q1?"]}}
 
-Use the exact scan names listed above as top-level keys. Every circle number for a given scan must appear in exactly one type for that scan.`});
+Every circle number must appear in exactly one type.`});
 
-    const aiModel=(document.getElementById('aiModelSelect')?.value)||'claude-haiku-4-5-20251001';
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
-      body:JSON.stringify({model:aiModel,max_tokens:4000,messages:[{role:'user',content:msgContent}]})
-    });
-    if(!resp.ok){ const e=await resp.text(); throw new Error(`API ${resp.status}: ${e.slice(0,200)}`); }
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
+        body:JSON.stringify({model:aiModel,max_tokens:2000,messages:[{role:'user',content:scanMsgContent}]})
+      });
+      if(!resp.ok){ const e=await resp.text(); throw new Error(`API ${resp.status} for "${s.query}": ${e.slice(0,200)}`); }
 
-    const apiData=await resp.json();
-    const usage=apiData.usage||{};
-    const inTok=usage.input_tokens||0, outTok=usage.output_tokens||0;
-    // Pricing: Haiku $1/$5 per MTok, Sonnet $3/$15 per MTok
-    const isSonnet=aiModel.includes('sonnet');
-    const costUSD=((inTok/1e6)*(isSonnet?3:1))+((outTok/1e6)*(isSonnet?15:5));
-    const modelLabel=isSonnet?'Sonnet':'Haiku';
-    const tc=document.getElementById('tokenCounter');
-    if(tc){ tc.style.display='block'; tc.textContent=`${modelLabel}: ${inTok.toLocaleString()} in · ${outTok.toLocaleString()} out · $${costUSD.toFixed(5)}`; }
+      const apiData=await resp.json();
+      const usage=apiData.usage||{};
+      totalInTok+=usage.input_tokens||0; totalOutTok+=usage.output_tokens||0;
+      const costUSD=((totalInTok/1e6)*(isSonnet?3:1))+((totalOutTok/1e6)*(isSonnet?15:5));
+      if(tc){ tc.style.display='block'; tc.textContent=`${modelLabel}: ${totalInTok.toLocaleString()} in · ${totalOutTok.toLocaleString()} out · $${costUSD.toFixed(5)}`; }
 
-    const rawText=apiData.content?.[0]?.text?.trim()||'';
-    const jsonMatch=rawText.match(/\{[\s\S]*\}/);
-    if(!jsonMatch) throw new Error('No JSON in AI response: '+rawText.slice(0,200));
-    const allData=JSON.parse(jsonMatch[0]);
+      const rawText=apiData.content?.[0]?.text?.trim()||'';
+      const jsonMatch=rawText.match(/\{[\s\S]*\}/);
+      if(!jsonMatch) throw new Error(`No JSON in AI response for "${s.query}": `+rawText.slice(0,200));
+      const scanData=JSON.parse(jsonMatch[0]);
+
+      // ── Apply this item's types immediately — scoped to this scan only ──
+      Object.keys(scanData).forEach(k=>{ if(Array.isArray(scanData[k])) scanData[k]={circles:scanData[k]}; });
+      const typeKeys=Object.keys(scanData);
+      typeKeys.forEach((typeKey,ti)=>{
+        const color=TYPE_COLORS[ti%TYPE_COLORS.length];
+        (scanData[typeKey].circles||[]).forEach(circNum=>{
+          const idx=circNum-1;
+          if(s.findingsSnap&&s.findingsSnap[idx]){
+            s.findingsSnap[idx].typeKey=typeKey;
+            s.findingsSnap[idx].typeColor=color;
+            s.findingsSnap[idx].typeIndex=ti;
+          }
+        });
+      });
+      if(s.findingsSnap) s.findingsSnap.forEach(f=>{
+        if(!f.typeKey&&typeKeys.length>0){
+          const ti=typeKeys.length-1;
+          f.typeKey=typeKeys[ti]; f.typeColor=TYPE_COLORS[ti%TYPE_COLORS.length]; f.typeIndex=ti;
+        }
+      });
+      s.types=typeKeys.map((typeKey,ti)=>{
+        const aiName=String(scanData[typeKey].name||'').trim();
+        const isGenericKey=(typeKey==='1'||typeKey==='undefined')&&typeKeys.length===1;
+        return {
+          type: aiName || (isGenericKey ? s.query : typeKey),
+          typeKey: typeKey,
+          autoNamed: !aiName && isGenericKey,
+          count:(scanData[typeKey].circles||[]).length,
+          questions:scanData[typeKey].questions||[]
+        };
+      });
+      if(s.types.length===0) s.types=[{type:s.query,typeKey:'1',autoNamed:true,count:s.findingsCount,questions:[]}];
+      if(s.findingsSnap){
+        s.types.forEach(t=>{
+          const actual=s.findingsSnap.filter(f=>f.typeKey===t.typeKey).length;
+          if(actual>0) t.count=actual;
+        });
+      }
+      if(s.baseImg&&s.findingsSnap&&s.templateSize){
+        s.markedUpImg=await renderColoredMarkedImg(s.baseImg,s.findingsSnap,s.templateSize.w,s.templateSize.h);
+      }
+    }
 
     // Generate questions for text search scans — only when a detail image exists and user opted in
     const textScans=qaqcSession.filter(s=>s.isTextSearch);
@@ -3730,64 +3761,12 @@ Respond ONLY with valid JSON: {"calloutName": ["Q1?","Q2?","Q3?","Q4?"], ...}`}]
     // Always ensure all text scans have types set (even if no detail / AI skipped)
     textScans.forEach(s=>{ if(!s.types||!s.types.length) s.types=[{type:s.query,autoNamed:true,count:s.findingsCount,questions:[]}]; });
 
-    // Populate types + assign colors to findings snapshots, then re-render markedUpImg
-    for(const s of qaqcSession){
-      if(s.isTextSearch) continue; // already handled above
-      const scanData=_lookupScanData(allData,s.query)||{};
-      // tolerate the AI returning a bare array of circles for a type
-      Object.keys(scanData).forEach(k=>{ if(Array.isArray(scanData[k])) scanData[k]={circles:scanData[k]}; });
-      const typeKeys=Object.keys(scanData);
-      // Assign typeKey + typeColor to each finding in the snapshot
-      typeKeys.forEach((typeKey,ti)=>{
-        const color=TYPE_COLORS[ti%TYPE_COLORS.length];
-        (scanData[typeKey].circles||[]).forEach(circNum=>{
-          const idx=circNum-1;
-          if(s.findingsSnap&&s.findingsSnap[idx]){
-            s.findingsSnap[idx].typeKey=typeKey;
-            s.findingsSnap[idx].typeColor=color;
-            s.findingsSnap[idx].typeIndex=ti;
-          }
-        });
-      });
-      // Any unassigned get the last type
-      if(s.findingsSnap) s.findingsSnap.forEach(f=>{
-        if(!f.typeKey&&typeKeys.length>0){
-          const ti=typeKeys.length-1;
-          f.typeKey=typeKeys[ti]; f.typeColor=TYPE_COLORS[ti%TYPE_COLORS.length]; f.typeIndex=ti;
-        }
-      });
-      // Build types — store original typeKey for count recalculation
-      s.types=typeKeys.map((typeKey,ti)=>{
-        const aiName=String(scanData[typeKey].name||'').trim();
-        const isGenericKey=(typeKey==='1'||typeKey==='undefined')&&typeKeys.length===1;
-        return {
-          type: aiName || (isGenericKey ? s.query : typeKey),
-          typeKey: typeKey,
-          autoNamed: !aiName && isGenericKey,
-          count:(scanData[typeKey].circles||[]).length,
-          questions:scanData[typeKey].questions||[]
-        };
-      });
-      if(s.types.length===0) s.types=[{type:s.query,typeKey:'1',autoNamed:true,count:s.findingsCount,questions:[]}];
-      // Recalculate counts from actual findingsSnap assignments (handles AI returning empty circles[])
-      if(s.findingsSnap){
-        s.types.forEach(t=>{
-          const actual=s.findingsSnap.filter(f=>f.typeKey===t.typeKey).length;
-          if(actual>0) t.count=actual;
-        });
-      }
-      // Re-render markedUpImg with color-coded circles
-      if(s.baseImg&&s.findingsSnap&&s.templateSize){
-        s.markedUpImg=await renderColoredMarkedImg(s.baseImg,s.findingsSnap,s.templateSize.w,s.templateSize.h);
-      }
-    }
-    // Apply colors to live findings on screen (last session = most recent scan)
+    // Apply colors to live findings on screen (last session = most recent scan) —
+    // types were already assigned to each scan's findingsSnap inline in the loop above.
     const lastS=qaqcSession[qaqcSession.length-1];
     if(lastS&&lastS.findingsSnap&&lastS.findingsSnap.length===findings.length){
-      const scanData=_lookupScanData(allData,lastS.query)||{};
-      const typeKeys=Object.keys(scanData);
       lastS.findingsSnap.forEach((sf,i)=>{ if(findings[i]){ findings[i].typeKey=sf.typeKey; findings[i].typeColor=sf.typeColor; findings[i].typeIndex=sf.typeIndex; }});
-      currentTypeMap=typeKeys.map((typeKey,ti)=>({typeKey,color:TYPE_COLORS[ti%TYPE_COLORS.length],count:(scanData[typeKey].circles||[]).length}));
+      currentTypeMap=(lastS.types||[]).map(t=>({typeKey:t.typeKey,color:TYPE_COLORS[(t.typeIndex||0)%TYPE_COLORS.length],count:t.count}));
       drawMarkers(activeIdx);
       if(searchRegion) drawRegionBox();
       renderFindings();
@@ -4130,9 +4109,9 @@ async function startTypeVerification(){
       const typeKey=t.type;             // display name — used for labels
       const color=TYPE_COLORS[typeIdx%TYPE_COLORS.length];
       const TW=scan.templateSize.w, TH=scan.templateSize.h;
-      const pad=Math.max(TW,TH)*1.8;
+      const pad=Math.max(TW,TH)*0.35;
       const cropW=Math.round(TW+pad*2), cropH=Math.round(TH+pad*2);
-      const dispSz=Math.min(110,cropW);
+      const dispSz=150;
       const scale=dispSz/cropW;
 
       const typeRow=document.createElement('div');
@@ -4260,6 +4239,7 @@ function buildCropWrapper(scan,idx,f,baseImgEl,cropW,cropH,scale,color,pad,TW,TH
   c.dataset.finding=`${scan.query}-${idx}`;
 
   const ctx=c.getContext('2d');
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
   const sx=Math.max(0,Math.round(f.x-TW/2-pad));
   const sy=Math.max(0,Math.round(f.y-TH/2-pad));
   ctx.drawImage(baseImgEl,sx,sy,cropW,cropH,0,0,c.width,c.height);

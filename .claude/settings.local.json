@@ -6,7 +6,12 @@
       "Read(//tmp/**)",
       "Bash(python3 -)",
       "Bash(git add *)",
-      "Bash(git commit -q -m 'Fix: restore body markup dropped during initial split *)"
+      "Bash(git commit -q -m 'Fix: restore body markup dropped during initial split *)",
+      "Bash(echo \"exit code: $?\")",
+      "Bash(node --check src/vector-scan.js)",
+      "Bash(node --check src/app.js)",
+      "Bash(git stash *)",
+      "Bash(git commit -q -m 'Fix AI type-sorting quality and mixed-item results, shade markup boxes *)"
     ]
   }
 }
