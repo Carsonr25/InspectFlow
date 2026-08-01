@@ -3594,6 +3594,20 @@ async function createQaqcTemplate(){
 
     for(let scanIdx=0;scanIdx<templateScans.length;scanIdx++){
       const s=templateScans[scanIdx];
+
+      // Ask before spending an AI call — some items (e.g. shear walls) are
+      // all one type and sorting is just noise. Skip straight to a single
+      // type if the user says no, or if there's only one markup anyway.
+      const shouldSort = s.findingsSnap.length>1 && await askShouldSortItem(s.query, s.findingsSnap.length);
+      if(!shouldSort){
+        s.types=[{type:s.query,typeKey:'1',autoNamed:true,count:s.findingsSnap.length,questions:[]}];
+        if(s.findingsSnap) s.findingsSnap.forEach(f=>{ f.typeKey='1'; f.typeColor=TYPE_COLORS[0]; f.typeIndex=0; });
+        if(s.baseImg&&s.findingsSnap&&s.templateSize){
+          s.markedUpImg=await renderColoredMarkedImg(s.baseImg,s.findingsSnap,s.templateSize.w,s.templateSize.h);
+        }
+        continue;
+      }
+
       showStatus(`Sending "${s.query}" to Claude for analysis… (${scanIdx+1}/${templateScans.length})`,true);
 
       const scanMsgContent=[];
@@ -3778,20 +3792,13 @@ Respond ONLY with valid JSON: {"calloutName": ["Q1?","Q2?","Q3?","Q4?"], ...}`}]
     return;
   }
 
-  // AI done — re-enable button, then launch review → type verify → PDF
+  // AI done — re-enable button, then go straight to type verification.
+  // (No more one-by-one "Review Match" step here — that was built for
+  // verifying vector-scan template matches one at a time, which is pointless
+  // for manual markups the user already drew intentionally.)
   btn.disabled=false; btn.innerHTML='📱 Create Inspection';
-
-  // If every session is a text search there are no visual matches to review —
-  // skip straight to type verification.
-  const allTextSearch = qaqcSession.length > 0 && qaqcSession.every(s => s.isTextSearch);
-  if(allTextSearch){
-    showStatus('AI analysis complete — proceeding to type verification…', true);
-    startTypeVerification();
-  } else {
-    showStatus('AI analysis complete — reviewing each match now…', true);
-    qaqcReviewPending = true;
-    startReviewMode();
-  }
+  showStatus('AI analysis complete — reviewing types now…', true);
+  startTypeVerification();
 }
 
 function confirmTypesAndGeneratePdf(){

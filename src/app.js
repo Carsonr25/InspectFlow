@@ -114,6 +114,28 @@ function closeNewItemModal() {
   if (overlay) overlay.classList.remove('open');
 }
 
+// Resolves true/false based on which button the user clicks. Used before
+// running the per-item AI type-sort so items that are all one type (e.g.
+// shear walls) can skip classification entirely instead of always sorting.
+function askShouldSortItem(name, count) {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById('sortConfirmOverlay');
+    document.getElementById('sortConfirmTitle').textContent = `Sort "${name}" into types?`;
+    document.getElementById('sortConfirmSub').textContent = `${count} markup${count !== 1 ? 's' : ''} found. Claude will read each one and group them by type (e.g. Type 1, Type 4). Say no if this item is all one type.`;
+    const yesBtn = document.getElementById('sortConfirmYesBtn');
+    const noBtn = document.getElementById('sortConfirmNoBtn');
+    const cleanup = (result) => {
+      overlay.classList.remove('open');
+      yesBtn.onclick = null;
+      noBtn.onclick = null;
+      resolve(result);
+    };
+    yesBtn.onclick = () => cleanup(true);
+    noBtn.onclick = () => cleanup(false);
+    overlay.classList.add('open');
+  });
+}
+
 function confirmNewItem() {
   const input = document.getElementById('newItemNameInput');
   const name = input ? input.value : '';
