@@ -1573,7 +1573,7 @@ function onPointerDown(e){
 
 // Radius (in canvas px) of the little delete-badge drawn above each of the
 // selected item's markups — kept in sync with drawMarkers()'s own drawing.
-function _deleteBadgeRadius(){ return Math.max(overlayCanvas.width,overlayCanvas.height)*0.007; }
+function _deleteBadgeRadius(){ return 6/(scale||1); }
 
 function hitTestItemDeleteBadge(c){
   if(!currentSelectedItem||!currentSelectedItem.boxes||!currentSelectedItem.boxes.length) return -1;

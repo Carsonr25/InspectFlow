@@ -2026,7 +2026,9 @@ function drawMarkers(highlightIdx=-1){
       // Delete badge on the selected item's own markups only — a plain
       // click on one removes it in place (see hitTestItemDeleteBadge).
       if (isSel && canDeleteViaCanvas) {
-        const delR = Math.max(overlayCanvas.width, overlayCanvas.height) * 0.007;
+        // Fixed on-screen size regardless of zoom/resolution — canvas-space
+        // radius must shrink as you zoom in (scale grows) to stay ~6px on screen.
+        const delR = 6 / (typeof scale!=='undefined'&&scale?scale:1);
         item.boxes.forEach(b => {
           const cx = b.x + b.w, cy = b.y;
           octx.beginPath(); octx.arc(cx, cy, delR, 0, Math.PI * 2);
