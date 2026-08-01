@@ -415,10 +415,22 @@ function startMethodTextSearch() {
 // same underlying code as before; only the results step changed from a
 // sidebar list + one-by-one review modal to click-a-suggestion-to-add. ──
 let isInVectorReviewMode = false;
+let isInVectorScanForItemFlow = false;
+
+// Hides the legacy sub-sections not needed for the simplified item flow:
+// text-filter options, detail-legend capture, and the search-area step.
+// captureTemplate() re-shows some of these every time a template is
+// captured, so this gets called again after each capture too.
+function hideExtraVectorScanUI() {
+  const ids = ['textFilterWrap', 'detailCaptureWrap', 'addTemplate2Hint', 'regionStep2Wrap'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+}
 
 function startMethodTemplateMatching() {
   if (!currentSelectedItem) return;
   if (isInManualMarkupMode) finishManualMarkup();
+  isInVectorScanForItemFlow = true;
+  hideExtraVectorScanUI();
   const el = document.getElementById('queryInput');
   if (el) el.value = currentSelectedItem.name;
   document.getElementById('legacyTextSearchBlock').style.display = 'none';
@@ -479,6 +491,12 @@ function handleVectorSuggestionClick(c) {
 
 function exitToItemsMenu() {
   isInVectorReviewMode = false;
+  isInVectorScanForItemFlow = false;
+  // Clear any un-accepted suggestion markers — they're only meaningful
+  // while actively reviewing a scan, not once you've left that screen.
+  findings = [];
+  filteredFindingsForDisplay = [];
+  rejectedFindings = [];
   document.getElementById('sidebarOriginal').style.display = 'none';
   document.getElementById('itemsManagementUI').style.display = 'block';
   if (currentSelectedItem && currentSelectedItem.inSession) syncSessionFromItems();
@@ -1593,7 +1611,7 @@ function onPointerUp(e){
     else if(mode==='region') finishRegionSelect();
     else if(isSelectingDetailLegend) captureDetailLegend();
     else if(isSelectingTemplate2) captureTemplate2();
-    else captureTemplate();
+    else captureTemplate().then(()=>{ if(isInVectorScanForItemFlow) hideExtraVectorScanUI(); });
   }
   else if(isPanning){isPanning=false;zoomContent.classList.remove('panning');zoomViewport.style.cursor=(mode==='selecting'||mode==='region'||mode==='placing')?'crosshair':(activePlacement?'default':'grab');zoomViewport.classList.toggle('selecting',mode==='selecting'||mode==='region'||mode==='placing');}
 
