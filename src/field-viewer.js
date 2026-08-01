@@ -86,8 +86,12 @@ function renderFieldDrawing() {
   const fc = _fCanvas();
   // If the source PDF is currently loaded in pdfCanvas, draw from it directly —
   // this gives the same crisp resolution as the main PDF view when zooming in.
-  // Otherwise fall back to the stored image (e.g. assigned inspection from another user).
-  if (pdfCanvas && pdfCanvas.width > 100) {
+  // Otherwise fall back to the stored image (e.g. assigned inspection from another
+  // user, or opened straight from the dashboard without the tool view active).
+  // NOTE: an untouched <canvas> defaults to 300x150, which is > 100 in both
+  // dimensions — that default was passing this check and rendering a blank
+  // canvas instead of falling back, so the threshold needs to clear it.
+  if (pdfCanvas && pdfCanvas.width > 400 && pdfCanvas.height > 400) {
     fc.width = pdfCanvas.width;
     fc.height = pdfCanvas.height;
     fc.getContext('2d').drawImage(pdfCanvas, 0, 0);

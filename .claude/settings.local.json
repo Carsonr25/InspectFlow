@@ -15,7 +15,8 @@
       "Bash(git commit -q -m 'Ask per-item whether to sort into types; drop one-by-one match review *)",
       "Bash(git commit -q -m 'Wire Vector Scan as a second markup method on items *)",
       "Bash(git commit -q -m 'Fix JSON parsing crash when Claude adds trailing notes to its response *)",
-      "Bash(git commit -q -m 'Stop suggestion numbers reshuffling on accept; hide redundant name field *)"
+      "Bash(git commit -q -m 'Stop suggestion numbers reshuffling on accept; hide redundant name field *)",
+      "Bash(lsof -i :5173 -sTCP:LISTEN)"
     ]
   }
 }
