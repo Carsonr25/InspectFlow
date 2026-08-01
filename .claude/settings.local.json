@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Read(//Users/carsonrobenalt/**)"
+      "Read(//Users/carsonrobenalt/**)",
+      "Bash(sed -n 9695,9899p '/Users/carsonrobenalt/Library/Application Support/Claude/local-agent-mode-sessions/8b9b60b0-b8bf-4659-88df-ad51a96deaa0/21df198a-6659-4e1d-9b3c-fc24d1f34470/local_81ddce0a-f8e6-4a09-b4b9-df15f2191498/outputs/INSPECT-FLOW-WORKING.html')",
+      "Read(//tmp/**)",
+      "Bash(python3 -)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'Fix: restore body markup dropped during initial split *)"
     ]
   }
 }
