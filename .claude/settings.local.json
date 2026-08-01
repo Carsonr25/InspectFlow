@@ -20,7 +20,10 @@
       "Bash(git commit *)",
       "Bash(grep -n \"Markup \\\\${i + 1}\" src/app.js)",
       "Bash(node --check src/field-viewer.js)",
-      "Bash(node --check src/detail-folder.js)"
+      "Bash(node --check src/detail-folder.js)",
+      "Bash(npm run *)",
+      "Bash(mkdir -p public/src)",
+      "Bash(git mv *)"
     ]
   }
 }
