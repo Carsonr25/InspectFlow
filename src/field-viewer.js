@@ -1,0 +1,267 @@
+// ═══════════════════════════════════════════════════════════════════
+//  FIELD APP VIEWER — pan/zoom inspection view for mobile
+// ═══════════════════════════════════════════════════════════════════
+let _fieldData = null, _fieldActiveIdx = null, _fieldCurrentPath = null;
+let _fScale = 1, _fPanX = 0, _fPanY = 0;
+let _fPinching = false, _fPinchDist = 0, _fPinchScale = 1;
+let _fDragging = false, _fDragStart = null;
+let _fPointers = {};
+
+// Lazy getters — elements live inside #fieldWrap which isn't in DOM at script parse time
+function _fViewer() { return document.getElementById('fieldViewerWrap'); }
+function _fLayer()  { return document.getElementById('fieldDrawingLayer'); }
+function _fCanvas() { return document.getElementById('fieldDrawingCanvas'); }
+
+function _fApply() { _fLayer().style.transform = `translate(${_fPanX}px,${_fPanY}px) scale(${_fScale})`; }
+function _fZoom(cx, cy, factor) {
+  const ns = Math.min(8, Math.max(0.2, _fScale * factor));
+  const r = ns / _fScale;
+  _fPanX = cx - r*(cx - _fPanX); _fPanY = cy - r*(cy - _fPanY);
+  _fScale = ns; _fApply();
+}
+function _fFit() {
+  const vw = _fViewer().clientWidth, vh = _fViewer().clientHeight;
+  const iw = _fCanvas().width, ih = _fCanvas().height;
+  if (!iw || !ih) return;
+  _fScale = Math.min(vw/iw, vh/ih) * 0.95;
+  _fPanX = (vw - iw*_fScale)/2; _fPanY = (vh - ih*_fScale)/2;
+  _fApply();
+}
+
+// Touch/pointer events attached once when field viewer first opens
+function _fAttachEvents() {
+  const v = _fViewer();
+  if (v._eventsAttached) return;
+  v._eventsAttached = true;
+  // Stop sheet/scrim pointer events from triggering pan/zoom
+  ['fieldSheet','fieldScrim'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('pointerdown', e => e.stopPropagation());
+  });
+  v.addEventListener('pointerdown', e => {
+    _fPointers[e.pointerId] = {x:e.clientX, y:e.clientY};
+    const pts = Object.values(_fPointers);
+    if (pts.length === 2) {
+      _fPinching = true; _fDragging = false;
+      _fPinchDist = Math.hypot(pts[1].x-pts[0].x, pts[1].y-pts[0].y);
+      _fPinchScale = _fScale;
+    } else {
+      _fDragging = true;
+      _fDragStart = {x: e.clientX - _fPanX, y: e.clientY - _fPanY};
+    }
+  });
+  v.addEventListener('pointermove', e => {
+    _fPointers[e.pointerId] = {x:e.clientX, y:e.clientY};
+    const pts = Object.values(_fPointers);
+    if (_fPinching && pts.length === 2) {
+      const dist = Math.hypot(pts[1].x-pts[0].x, pts[1].y-pts[0].y);
+      const mid  = {x:(pts[0].x+pts[1].x)/2, y:(pts[0].y+pts[1].y)/2};
+      const ns = Math.min(8, Math.max(0.2, _fPinchScale * dist / _fPinchDist));
+      const r = ns / _fScale;
+      _fPanX = mid.x - r*(mid.x - _fPanX); _fPanY = mid.y - r*(mid.y - _fPanY);
+      _fScale = ns; _fApply();
+    } else if (_fDragging && _fDragStart && pts.length === 1) {
+      _fPanX = e.clientX - _fDragStart.x; _fPanY = e.clientY - _fDragStart.y; _fApply();
+    }
+  });
+  function _fEndPtr(e) {
+    delete _fPointers[e.pointerId];
+    if (Object.keys(_fPointers).length < 2) { _fPinching = false; }
+    if (Object.keys(_fPointers).length === 0) { _fDragging = false; _fDragStart = null; }
+  }
+  v.addEventListener('pointerup',     _fEndPtr);
+  v.addEventListener('pointercancel', _fEndPtr);
+  v.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = v.getBoundingClientRect();
+    _fZoom(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.15 : 1/1.15);
+  }, {passive:false});
+}
+
+function renderFieldDrawing() {
+  _fAttachEvents();
+  document.getElementById('fieldTitle').textContent = _fieldData.drawingName || 'Inspection';
+  document.getElementById('fieldPill').style.display = 'block';
+  document.getElementById('fieldBottomBar').style.display = 'flex';
+  const fc = _fCanvas();
+  // If the source PDF is currently loaded in pdfCanvas, draw from it directly —
+  // this gives the same crisp resolution as the main PDF view when zooming in.
+  // Otherwise fall back to the stored image (e.g. assigned inspection from another user).
+  if (pdfCanvas && pdfCanvas.width > 100) {
+    fc.width = pdfCanvas.width;
+    fc.height = pdfCanvas.height;
+    fc.getContext('2d').drawImage(pdfCanvas, 0, 0);
+    _fFit(); renderFieldBadges(); updateFieldProgress();
+  } else {
+    const img = new Image();
+    img.onload = () => {
+      fc.width = img.naturalWidth;
+      fc.height = img.naturalHeight;
+      fc.getContext('2d').drawImage(img, 0, 0);
+      _fFit(); renderFieldBadges(); updateFieldProgress();
+    };
+    img.src = _fieldData.imageDataUrl;
+  }
+}
+
+function renderFieldBadges() {
+  const bl = document.getElementById('fieldBadgeLayer');
+  bl.innerHTML = '';
+  const iw = _fCanvas().width, ih = _fCanvas().height;
+  _fieldData.findings.forEach((f, i) => {
+    const b = document.createElement('div');
+    b.className = 'finding-badge' +
+      (f.status==='pass'?' passed':f.status==='fail'?' failed':'') +
+      ((f.notes||f.photos.length)?' has-data':'');
+    b.style.cssText = `left:${f.xPct*iw}px;top:${f.yPct*ih}px;background:${f.color||'#0d9488'};`;
+    const sz = Math.max(iw,ih)*0.022;
+    b.style.width = sz+'px'; b.style.height = sz+'px'; b.style.fontSize = (sz*0.38)+'px';
+    b.textContent = i+1;
+    const ck = document.createElement('div'); ck.className='check';
+    ck.textContent = f.status==='pass'?'✓':'✗'; b.appendChild(ck);
+    b.addEventListener('click', e => { e.stopPropagation(); openFieldSheet(i); });
+    bl.appendChild(b);
+  });
+}
+
+function updateFieldProgress() {
+  const total    = _fieldData.findings.length;
+  const reviewed = _fieldData.findings.filter(f=>f.status!==null).length;
+  const passed   = _fieldData.findings.filter(f=>f.status==='pass').length;
+  const failed   = _fieldData.findings.filter(f=>f.status==='fail').length;
+  document.getElementById('fieldPill').textContent = reviewed+'/'+total;
+  document.getElementById('fieldCountPill').textContent =
+    reviewed+' / '+total+' reviewed'+(reviewed>0?'  ·  ✓ '+passed+'  ✕ '+failed:'');
+}
+
+function openFieldSheet(idx) {
+  _fieldActiveIdx = idx;
+  const f = _fieldData.findings[idx];
+  document.getElementById('fieldSheetTitle').textContent = f.label||('Match #'+(idx+1));
+  const badge = document.getElementById('fieldSheetBadge');
+  if (f.typeName && f.color) { badge.textContent=f.typeName; badge.style.background=f.color; badge.style.display='inline-flex'; }
+  else badge.style.display='none';
+  // Crop reference image
+  const fc=_fCanvas(),iw=fc.width,ih=fc.height;
+  const cx=f.xPct*iw,cy=f.yPct*ih,fw=(f.wPct||0.04)*iw,fh=(f.hPct||0.04)*ih;
+  const pad=Math.max(fw,fh)*1.2;
+  const sx=Math.max(0,cx-fw/2-pad),sy=Math.max(0,cy-fh/2-pad);
+  const sw=Math.min(iw-sx,fw+pad*2),sh=Math.min(ih-sy,fh+pad*2);
+  const cc=document.createElement('canvas'); cc.width=cc.height=200;
+  const cx2=cc.getContext('2d'); cx2.fillStyle='#fff'; cx2.fillRect(0,0,200,200);
+  const ar=sw/sh; let dw,dh,dx,dy;
+  if(ar>1){dw=200;dh=200/ar;dx=0;dy=(200-dh)/2;}else{dh=200;dw=200*ar;dy=0;dx=(200-dw)/2;}
+  cx2.drawImage(fc,sx,sy,sw,sh,dx,dy,dw,dh);
+  cx2.strokeStyle=f.color||'#0d9488'; cx2.lineWidth=2.5;
+  const hx=dx+(cx-sx)/sw*dw, hy=dy+(cy-sy)/sh*dh, hr=Math.min(dw,dh)*0.15;
+  cx2.beginPath(); cx2.arc(hx,hy,hr,0,Math.PI*2); cx2.stroke();
+  document.getElementById('fieldRefImg').src = cc.toDataURL('image/jpeg',0.9);
+  document.getElementById('fieldRefName').textContent = f.typeName||f.label||'Symbol';
+  document.getElementById('fieldRefScore').textContent = 'Match score: '+f.score+'%';
+  const descEl = document.getElementById('fieldRefDesc');
+  if (descEl) { descEl.textContent = f.description || ''; descEl.style.display = f.description ? 'block' : 'none'; }
+  document.getElementById('fieldRefSection').style.display = 'block';
+  // Checklist
+  const qs=f.questions||[];
+  const cl=document.getElementById('fieldChecklist');
+  const ci=document.getElementById('fieldCheckItems'); ci.innerHTML='';
+  if(qs.length){
+    if(!f.questionChecks||f.questionChecks.length!==qs.length) f.questionChecks=qs.map(()=>null);
+    qs.forEach((q,qi)=>{
+      const row=document.createElement('div'); row.className='check-item';
+      const qt=document.createElement('div'); qt.className='check-item-q'; qt.textContent=q;
+      const btns=document.createElement('div'); btns.className='check-btns';
+      const yb=document.createElement('button'); yb.className='check-btn yes'+(f.questionChecks[qi]===true?' active':''); yb.textContent='✓';
+      const nb=document.createElement('button'); nb.className='check-btn no'+(f.questionChecks[qi]===false?' active':''); nb.textContent='✕';
+      yb.onclick=()=>{f.questionChecks[qi]=f.questionChecks[qi]===true?null:true;yb.classList.toggle('active',f.questionChecks[qi]===true);nb.classList.remove('active');};
+      nb.onclick=()=>{f.questionChecks[qi]=f.questionChecks[qi]===false?null:false;nb.classList.toggle('active',f.questionChecks[qi]===false);yb.classList.remove('active');};
+      btns.appendChild(yb); btns.appendChild(nb); row.appendChild(qt); row.appendChild(btns); ci.appendChild(row);
+    });
+    cl.style.display='flex';
+  } else { cl.style.display='none'; }
+  document.getElementById('fieldNotes').value = f.notes||'';
+  document.getElementById('fieldPassBtn').classList.toggle('active', f.status==='pass');
+  document.getElementById('fieldFailBtn').classList.toggle('active', f.status==='fail');
+  renderFieldPhotos(f.photos);
+  document.getElementById('fieldSheet').classList.add('open');
+  document.getElementById('fieldScrim').style.display = 'block';
+}
+
+function closeFieldSheet() {
+  document.getElementById('fieldSheet').classList.remove('open');
+  document.getElementById('fieldScrim').style.display = 'none';
+  _fieldActiveIdx = null;
+}
+
+function setFieldStatus(s) {
+  if (_fieldActiveIdx===null) return;
+  const f = _fieldData.findings[_fieldActiveIdx];
+  f.status = f.status===s ? null : s;
+  document.getElementById('fieldPassBtn').classList.toggle('active', f.status==='pass');
+  document.getElementById('fieldFailBtn').classList.toggle('active', f.status==='fail');
+}
+
+function saveFieldAndClose() {
+  if (_fieldActiveIdx===null) return;
+  _fieldData.findings[_fieldActiveIdx].notes = document.getElementById('fieldNotes').value.trim();
+  // Save to localStorage
+  try { localStorage.setItem('qaqc_session_'+_fieldData.exportedAt, JSON.stringify({findings:_fieldData.findings})); } catch(e){}
+  // Sync back to Supabase
+  if (_sb && _sbUser && _fieldCurrentPath) {
+    const blob = new Blob([JSON.stringify(_fieldData)], {type:'application/json'});
+    _sb.storage.from('inspections').upload(_fieldCurrentPath, blob, {upsert:true})
+      .catch(e=>console.warn('[FieldApp] Sync failed:',e));
+  }
+  renderFieldBadges(); updateFieldProgress(); closeFieldSheet();
+  fieldToast('Saved ✓');
+}
+
+function renderFieldPhotos(photos) {
+  const grid = document.getElementById('fieldPhotosGrid'); grid.innerHTML='';
+  (photos||[]).forEach((url,pi)=>{
+    const th=document.createElement('div'); th.className='photo-thumb';
+    const im=document.createElement('img'); im.src=url;
+    const dl=document.createElement('button'); dl.className='photo-del'; dl.textContent='✕';
+    dl.onclick=()=>{ _fieldData.findings[_fieldActiveIdx].photos.splice(pi,1); renderFieldPhotos(_fieldData.findings[_fieldActiveIdx].photos); };
+    th.appendChild(im); th.appendChild(dl); grid.appendChild(th);
+  });
+  const ab=document.createElement('div'); ab.className='add-photo-btn';
+  ab.innerHTML='<span>📷</span>Add photo';
+  ab.onclick=()=>document.getElementById('fieldPhotoInput').click();
+  grid.appendChild(ab);
+}
+
+function addFieldPhoto(input) {
+  const file=input.files[0]; if(!file||_fieldActiveIdx===null) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const el=new Image(); el.onload=()=>{
+      const MAX=2800, ratio=Math.min(1,MAX/Math.max(el.width,el.height));
+      const c=document.createElement('canvas'); c.width=Math.round(el.width*ratio); c.height=Math.round(el.height*ratio);
+      c.getContext('2d').drawImage(el,0,0,c.width,c.height);
+      _fieldData.findings[_fieldActiveIdx].photos.push(c.toDataURL('image/jpeg',0.92));
+      renderFieldPhotos(_fieldData.findings[_fieldActiveIdx].photos);
+    }; el.src=ev.target.result;
+  };
+  reader.readAsDataURL(file); input.value='';
+}
+
+function fieldExportData() {
+  if (!_fieldData) return;
+  const payload = {imageDataUrl:_fieldData.imageDataUrl,drawingName:_fieldData.drawingName||'Inspection',exportedAt:_fieldData.exportedAt,inspectedAt:Date.now(),findings:_fieldData.findings};
+  const blob = new Blob([JSON.stringify(payload)],{type:'application/json'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='field_report.json'; a.click();
+  fieldToast('Exported ✓');
+}
+
+function fieldToast(msg) {
+  const t=document.getElementById('fieldToast'); t.textContent=msg;
+  t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+// Start the app — deferred so all DOM elements (including #fieldWrap) exist
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
