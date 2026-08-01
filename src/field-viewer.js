@@ -148,7 +148,7 @@ function openFieldSheet(idx) {
   // Crop reference image
   const fc=_fCanvas(),iw=fc.width,ih=fc.height;
   const cx=f.xPct*iw,cy=f.yPct*ih,fw=(f.wPct||0.04)*iw,fh=(f.hPct||0.04)*ih;
-  const pad=Math.max(fw,fh)*1.2;
+  const pad=Math.max(fw,fh)*0.4;
   const sx=Math.max(0,cx-fw/2-pad),sy=Math.max(0,cy-fh/2-pad);
   const sw=Math.min(iw-sx,fw+pad*2),sh=Math.min(ih-sy,fh+pad*2);
   const cc=document.createElement('canvas'); cc.width=cc.height=200;

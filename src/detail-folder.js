@@ -498,28 +498,39 @@ async function confirmTypesAndCreateInspection() {
 
   if (types.length === 0) { doExportToFieldApp(); return; }
 
-  showStatus('AI is generating field descriptions…', true);
+  showStatus('AI is reading the details for field descriptions…', true);
 
   try {
-    const prompt = `You are helping a field inspector identify construction symbols on drawings.
-For each symbol type listed below, write ONE concise sentence (max 20 words) describing what to look for physically in the field — focus on size, shape, connection type, material, or distinguishing features.
+    // Read the actual detail/legend image so descriptions cite real specs
+    // (size, length, embedment, fastener count) instead of just guessing
+    // from the type's name — this was the gap: the old version never sent
+    // the legend to the model at all, so it could only describe generically.
+    const legendSession = qaqcSession.find(s => !s.isTextSearch && s.detailImg);
+    const msgContent = [];
+    if (legendSession) {
+      msgContent.push({ type:'image', source:{ type:'base64', media_type:'image/jpeg', data: legendSession.detailImg.split(',')[1] } });
+      msgContent.push({ type:'text', text:'LEGEND IMAGE: the detail / keynote schedule for these symbol types.' });
+    }
+    msgContent.push({ type:'text', text: `You are helping a field inspector identify construction symbols on drawings.
+For each type below, ${legendSession ? 'read the legend image above to find its specific callout' : 'describe what it physically looks like'} — size, length, embedment depth, fastener count/spec, material, or connection type. Write ONE concise sentence (max 25 words) telling the inspector exactly what to verify in the field, using the ACTUAL values from the legend when they're visible for that type. If the legend doesn't cover a given type, describe the symbol generically instead of inventing numbers.
 
 Types:
-${types.map((t,i) => `${i+1}. "${t.name}" (from scan: "${t.query}")`).join('\n')}
+${types.map((t,i) => `${i+1}. "${t.name}" (typeKey: "${t.typeKey}", from scan: "${t.query}")`).join('\n')}
 
-Return ONLY valid JSON array, no markdown, no explanation:
-[{"typeKey":"...","description":"..."}]`;
+Return ONLY valid JSON, no markdown, no explanation:
+{"types":[{"typeKey":"...","description":"..."}]}` });
 
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024,
-        messages: [{ role: 'user', content: prompt }] })
+        messages: [{ role: 'user', content: msgContent }] })
     });
 
     const json = await resp.json();
-    const raw = json.content?.[0]?.text || '[]';
-    const descriptions = JSON.parse(raw.match(/\[[\s\S]*\]/)?.[0] || '[]');
+    const raw = json.content?.[0]?.text || '';
+    const jsonStr = extractFirstJsonObject(raw);
+    const descriptions = jsonStr ? (JSON.parse(jsonStr).types || []) : [];
 
     // Attach descriptions to types in qaqcSession
     descriptions.forEach(d => {
