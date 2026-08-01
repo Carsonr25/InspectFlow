@@ -450,9 +450,27 @@ function getPlacementHandle(cx, cy) {
 
 // ── Inspection flow vs PDF flow ──────────────────────────────────────
 let _inspectionMode = false;
+let _pendingInspectionName = '';
 
 function startInspectionFlow() {
   if(qaqcSession.length === 0){ showError('No scans added yet — run a scan first.'); return; }
+  const overlay = document.getElementById('inspectionNameOverlay');
+  const input = document.getElementById('inspectionNameInput');
+  if (input) input.value = document.title !== 'InspectFlow' ? document.title : '';
+  if (overlay) overlay.classList.add('open');
+  if (input) setTimeout(() => input.focus(), 0);
+}
+
+function closeInspectionNameModal() {
+  document.getElementById('inspectionNameOverlay').classList.remove('open');
+}
+
+function confirmInspectionName() {
+  const input = document.getElementById('inspectionNameInput');
+  const name = (input ? input.value : '').trim();
+  if (!name) return;
+  _pendingInspectionName = name;
+  closeInspectionNameModal();
   _inspectionMode = true;
   includeAIQuestions = false;
   createQaqcTemplate();

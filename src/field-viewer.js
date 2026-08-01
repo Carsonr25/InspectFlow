@@ -161,7 +161,7 @@ function openFieldSheet(idx) {
   cx2.beginPath(); cx2.arc(hx,hy,hr,0,Math.PI*2); cx2.stroke();
   document.getElementById('fieldRefImg').src = cc.toDataURL('image/jpeg',0.9);
   document.getElementById('fieldRefName').textContent = f.typeName||f.label||'Symbol';
-  document.getElementById('fieldRefScore').textContent = 'Match score: '+f.score+'%';
+  document.getElementById('fieldRefScore').style.display = 'none';
   const descEl = document.getElementById('fieldRefDesc');
   if (descEl) { descEl.textContent = f.description || ''; descEl.style.display = f.description ? 'block' : 'none'; }
   document.getElementById('fieldRefSection').style.display = 'block';

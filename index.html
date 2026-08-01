@@ -24,6 +24,17 @@
   </div>
 </div>
 
+<!-- Inspection name modal -->
+<div id="inspectionNameOverlay">
+  <div class="newitem-card">
+    <div class="newitem-title">Name this inspection</div>
+    <div class="newitem-sub">e.g. <b>Foundation Plan S2.1</b>, <b>Level 2 Shear Walls</b></div>
+    <input type="text" id="inspectionNameInput" class="newitem-input" placeholder="Inspection name" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmInspectionName();}" />
+    <button class="newitem-create" onclick="confirmInspectionName()">Continue</button>
+    <button class="newitem-cancel" onclick="closeInspectionNameModal()">Cancel</button>
+  </div>
+</div>
+
 <!-- Sort-into-types confirm modal -->
 <div id="sortConfirmOverlay">
   <div class="sortconfirm-card">

@@ -5214,7 +5214,7 @@ function doExportToFieldApp(){
   const payload = {
     version: 2,
     exportedAt: new Date().toISOString(),
-    drawingName: document.title || 'Drawing',
+    drawingName: (typeof _pendingInspectionName!=='undefined'&&_pendingInspectionName) || document.title || 'Drawing',
     imageWidth: W,
     imageHeight: H,
     imageDataUrl,

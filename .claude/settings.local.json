@@ -18,7 +18,9 @@
       "Bash(git commit -q -m 'Stop suggestion numbers reshuffling on accept; hide redundant name field *)",
       "Bash(lsof -i :5173 -sTCP:LISTEN)",
       "Bash(git commit *)",
-      "Bash(grep -n \"Markup \\\\${i + 1}\" src/app.js)"
+      "Bash(grep -n \"Markup \\\\${i + 1}\" src/app.js)",
+      "Bash(node --check src/field-viewer.js)",
+      "Bash(node --check src/detail-folder.js)"
     ]
   }
 }
