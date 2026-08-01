@@ -2009,6 +2009,7 @@ function drawMarkers(highlightIdx=-1){
 
   // ── Persistent item markup boxes (always drawn, one color per item) ──
   if (typeof inspectionItems !== 'undefined' && inspectionItems.length) {
+    const canDeleteViaCanvas = !(typeof isInManualMarkupMode!=='undefined'&&isInManualMarkupMode) && !(typeof isInVectorReviewMode!=='undefined'&&isInVectorReviewMode);
     inspectionItems.forEach(item => {
       if (!item.boxes || !item.boxes.length) return;
       const isSel = currentSelectedItem && currentSelectedItem.id === item.id;
@@ -2022,6 +2023,24 @@ function drawMarkers(highlightIdx=-1){
         octx.strokeRect(b.x, b.y, b.w, b.h);
       });
       octx.globalAlpha = 1;
+      // Delete badge on the selected item's own markups only — a plain
+      // click on one removes it in place (see hitTestItemDeleteBadge).
+      if (isSel && canDeleteViaCanvas) {
+        const delR = Math.max(overlayCanvas.width, overlayCanvas.height) * 0.007;
+        item.boxes.forEach(b => {
+          const cx = b.x + b.w, cy = b.y;
+          octx.beginPath(); octx.arc(cx, cy, delR, 0, Math.PI * 2);
+          octx.fillStyle = '#dc2626'; octx.fill();
+          octx.lineWidth = Math.max(delR * 0.15, 1);
+          octx.strokeStyle = '#fff'; octx.stroke();
+          octx.lineWidth = Math.max(delR * 0.28, 1.5);
+          const o = delR * 0.4;
+          octx.beginPath();
+          octx.moveTo(cx - o, cy - o); octx.lineTo(cx + o, cy + o);
+          octx.moveTo(cx + o, cy - o); octx.lineTo(cx - o, cy + o);
+          octx.stroke();
+        });
+      }
     });
   }
 
@@ -3712,11 +3731,25 @@ Respond with ONLY valid JSON, no explanation or markdown:
 
 Every circle number must appear in exactly one type.`});
 
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',
-        headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
-        body:JSON.stringify({model:aiModel,max_tokens:2000,messages:[{role:'user',content:scanMsgContent}]})
-      });
+      // "Failed to fetch" is a network-level failure (dropped connection,
+      // transient DNS/TLS hiccup) rather than an API error — worth a couple
+      // of quiet retries before giving up and losing the whole run.
+      let resp, lastNetErr;
+      for(let attempt=0;attempt<3;attempt++){
+        try{
+          resp=await fetch('https://api.anthropic.com/v1/messages',{
+            method:'POST',
+            headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
+            body:JSON.stringify({model:aiModel,max_tokens:2000,messages:[{role:'user',content:scanMsgContent}]})
+          });
+          lastNetErr=null;
+          break;
+        }catch(networkErr){
+          lastNetErr=networkErr;
+          if(attempt<2){ showStatus(`Network hiccup sending "${s.query}" — retrying… (${attempt+1}/2)`,true); await new Promise(r=>setTimeout(r,1200)); }
+        }
+      }
+      if(lastNetErr) throw new Error(`Network error for "${s.query}" after 3 attempts: ${lastNetErr.message}`);
       if(!resp.ok){ const e=await resp.text(); throw new Error(`API ${resp.status} for "${s.query}": ${e.slice(0,200)}`); }
 
       const apiData=await resp.json();

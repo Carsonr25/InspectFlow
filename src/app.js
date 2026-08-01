@@ -157,12 +157,20 @@ function confirmNewItem() {
   showStatus(`"${item.name}" added — hit Mark Up to start boxing them.`);
 }
 
+let _showColorPicker = false;
+
 function selectItem(itemId) {
   if (isInManualMarkupMode) return;
   const it = inspectionItems.find(i => i.id === itemId);
   currentSelectedItem = (currentSelectedItem && currentSelectedItem.id === itemId) ? null : it || null;
+  _showColorPicker = false;
   renderItemsList();
   drawMarkers();
+}
+
+function toggleColorPicker() {
+  _showColorPicker = !_showColorPicker;
+  renderItemsList();
 }
 
 function deselectItem() {
@@ -210,9 +218,13 @@ function renderItemsList() {
       </div>
       ${sel ? `
       <div style="padding:10px;border-top:1px solid var(--border);">
-        <div style="display:flex;gap:5px;margin-bottom:9px;">
-          ${ITEM_COLORS.map(c => `<span onclick="setItemColor(${item.id},'${c}')" style="width:17px;height:17px;border-radius:4px;background:${c};cursor:pointer;border:2px solid ${c === item.color ? 'var(--text)' : 'transparent'};box-sizing:border-box;"></span>`).join('')}
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
+          <span style="width:17px;height:17px;border-radius:4px;background:${item.color};flex:none;border:2px solid var(--text);box-sizing:border-box;"></span>
+          <button onclick="toggleColorPicker()" style="font-size:11px;color:var(--text2);background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;cursor:pointer;">${_showColorPicker ? 'Cancel' : 'Change color'}</button>
         </div>
+        ${_showColorPicker ? `<div style="display:flex;gap:5px;margin-bottom:9px;">
+          ${ITEM_COLORS.map(c => `<span onclick="setItemColor(${item.id},'${c}');toggleColorPicker();" style="width:17px;height:17px;border-radius:4px;background:${c};cursor:pointer;border:2px solid ${c === item.color ? 'var(--text)' : 'transparent'};box-sizing:border-box;"></span>`).join('')}
+        </div>` : ''}
         <div style="display:flex;gap:6px;">
           <button onclick="startMethodManualMarkup()" style="flex:1;padding:9px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">✎ ${n ? 'More' : 'Manual'}</button>
           <button onclick="startMethodTemplateMatching()" style="flex:1;padding:9px;background:#0F6E56;color:#fff;border:none;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">🔍 Vector Scan</button>
@@ -502,6 +514,12 @@ function exitToItemsMenu() {
   findings = [];
   filteredFindingsForDisplay = [];
   rejectedFindings = [];
+  // Clear the captured template itself too, so its dashed orange outline
+  // (drawn whenever templateCanvas/templateSelBox are set and mode isn't
+  // 'idle') doesn't keep showing on the sheet after leaving this panel.
+  templateCanvas = null;
+  templateSelBox = null;
+  mode = 'idle';
   document.getElementById('sidebarOriginal').style.display = 'none';
   document.getElementById('itemsManagementUI').style.display = 'block';
   if (currentSelectedItem && currentSelectedItem.inSession) syncSessionFromItems();
@@ -1538,10 +1556,35 @@ function onPointerDown(e){
     selBand.style.display='block';updateSelBand();
     e.preventDefault();
   } else {
+    // A click on the small delete badge above one of the selected item's
+    // own markups removes it in place, instead of starting a pan.
+    const c=vpToCanvas(e.clientX,e.clientY);
+    const hitIdx=hitTestItemDeleteBadge(c);
+    if(hitIdx>=0){
+      deleteBox(currentSelectedItem.id,hitIdx);
+      e.preventDefault();
+      return;
+    }
     isPanning=true;panStart={x:e.clientX-panX,y:e.clientY-panY};
     zoomContent.classList.add('panning');
     zoomViewport.style.cursor='grabbing';
   }
+}
+
+// Radius (in canvas px) of the little delete-badge drawn above each of the
+// selected item's markups — kept in sync with drawMarkers()'s own drawing.
+function _deleteBadgeRadius(){ return Math.max(overlayCanvas.width,overlayCanvas.height)*0.007; }
+
+function hitTestItemDeleteBadge(c){
+  if(!currentSelectedItem||!currentSelectedItem.boxes||!currentSelectedItem.boxes.length) return -1;
+  if(isInManualMarkupMode||isInVectorReviewMode) return -1;
+  const r=_deleteBadgeRadius()*1.6; // generous click target
+  for(let i=0;i<currentSelectedItem.boxes.length;i++){
+    const b=currentSelectedItem.boxes[i];
+    const cx=b.x+b.w, cy=b.y;
+    if(Math.hypot(c.x-cx,c.y-cy)<=r) return i;
+  }
+  return -1;
 }
 function onPointerMove(e){
   // ── Detail: resize handle drag ──
