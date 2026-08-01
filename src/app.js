@@ -444,6 +444,11 @@ async function runVectorScanForItem() {
   if (!currentSelectedItem) return;
   await prepareTextFilterForSearch();
   await runVectorScan();
+  // Assign each suggestion a stable number now, before any get accepted —
+  // drawMarkers() uses this instead of the live array index, so clicking
+  // one to accept it (which splices it out of findings[]) doesn't shift
+  // the numbers on every suggestion after it.
+  findings.forEach((f,i)=>{ f._stableNum=i+1; });
   // Show every match as a clickable suggestion, regardless of the
   // auto-detected confidence cutoff — there's no toggle UI in this flow.
   _showBelowCutoff = true;

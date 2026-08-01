@@ -2101,10 +2101,13 @@ function drawMarkers(highlightIdx=-1){
     octx.strokeStyle=isActive?'#1e3a5f':baseColor;
     octx.lineWidth=Math.max(W,H)*0.001;
     octx.strokeRect(x,y,w,h);
-    // Tiny number tag — just above top-left corner, outside the box
+    // Tiny number tag — just above top-left corner, outside the box.
+    // Uses the finding's stable number (assigned once at scan time) rather
+    // than its live array index, so accepting one suggestion doesn't
+    // renumber every suggestion after it.
     octx.font=`500 ${fs}px Inter,-apple-system,sans-serif`;
     octx.textAlign='center'; octx.textBaseline='middle';
-    const lbl=String(i+1);
+    const lbl=String(f._stableNum||(i+1));
     const bw=Math.max(fs*1.6, octx.measureText(lbl).width+fs*0.8);
     const bh=fs*1.5;
     octx.globalAlpha=isActive?0.85:0.65;
