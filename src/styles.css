@@ -397,9 +397,9 @@
        pixels by _fApply() on every pan/zoom. So this size is a genuine,
        constant on-screen size at all times — no counter-scaling needed. */
     position: absolute; transform: translate(-50%, -50%);
-    width: 60px; height: 60px; border-radius: 50%;
+    width: 30px; height: 30px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 22px; font-weight: 800; color: #fff;
+    font-size: 12px; font-weight: 800; color: #fff;
     box-shadow: 0 2px 8px rgba(0,0,0,0.4);
     cursor: pointer; border: 2.5px solid rgba(255,255,255,0.6);
     transition: transform 0.1s; user-select: none;
@@ -410,9 +410,9 @@
   .finding-badge.failed { outline: 3px solid var(--red); }
   .finding-badge:active { transform: translate(-50%,-50%) scale(0.9); }
   .finding-badge .check {
-    position: absolute; top: -6px; right: -6px;
-    width: 24px; height: 24px; border-radius: 50%;
-    font-size: 13px; font-weight: 900; display: none;
+    position: absolute; top: -4px; right: -4px;
+    width: 14px; height: 14px; border-radius: 50%;
+    font-size: 8px; font-weight: 900; display: none;
     align-items: center; justify-content: center;
   }
   .finding-badge.passed .check { display: flex; background: var(--green); }
