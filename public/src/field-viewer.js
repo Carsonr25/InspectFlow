@@ -78,6 +78,20 @@ function _fAttachEvents() {
   }, {passive:false});
 }
 
+// Mobile browsers (iOS Safari especially) silently fail to render a <canvas>
+// past a certain total pixel area — the canvas just comes out blank, no
+// error thrown. Desktop browsers allow much larger canvases, so a sheet
+// that renders fine on desktop can go blank on a phone. 4096x4096 (~16.7M
+// px) is a conservative ceiling that's safe across mobile browsers; scale
+// down to fit within it rather than drawing 1:1.
+const _F_MAX_CANVAS_AREA = 4096 * 4096;
+function _fSafeCanvasSize(w, h) {
+  const area = w * h;
+  if (area <= _F_MAX_CANVAS_AREA) return { w, h };
+  const scale = Math.sqrt(_F_MAX_CANVAS_AREA / area);
+  return { w: Math.round(w * scale), h: Math.round(h * scale) };
+}
+
 function renderFieldDrawing() {
   _fAttachEvents();
   document.getElementById('fieldTitle').textContent = _fieldData.drawingName || 'Inspection';
@@ -92,16 +106,16 @@ function renderFieldDrawing() {
   // dimensions — that default was passing this check and rendering a blank
   // canvas instead of falling back, so the threshold needs to clear it.
   if (pdfCanvas && pdfCanvas.width > 400 && pdfCanvas.height > 400) {
-    fc.width = pdfCanvas.width;
-    fc.height = pdfCanvas.height;
-    fc.getContext('2d').drawImage(pdfCanvas, 0, 0);
+    const {w, h} = _fSafeCanvasSize(pdfCanvas.width, pdfCanvas.height);
+    fc.width = w; fc.height = h;
+    fc.getContext('2d').drawImage(pdfCanvas, 0, 0, w, h);
     _fFit(); renderFieldBadges(); updateFieldProgress();
   } else {
     const img = new Image();
     img.onload = () => {
-      fc.width = img.naturalWidth;
-      fc.height = img.naturalHeight;
-      fc.getContext('2d').drawImage(img, 0, 0);
+      const {w, h} = _fSafeCanvasSize(img.naturalWidth, img.naturalHeight);
+      fc.width = w; fc.height = h;
+      fc.getContext('2d').drawImage(img, 0, 0, w, h);
       _fFit(); renderFieldBadges(); updateFieldProgress();
     };
     img.src = _fieldData.imageDataUrl;
