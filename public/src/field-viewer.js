@@ -3,6 +3,11 @@
 // ═══════════════════════════════════════════════════════════════════
 let _fieldData = null, _fieldActiveIdx = null, _fieldCurrentPath = null;
 let _fScale = 1, _fPanX = 0, _fPanY = 0;
+// Scale at the initial "fit whole sheet on screen" view — badges are sized
+// relative to THIS, not to a raw 1:1 scale of 1. A big sheet fits at a tiny
+// scale (e.g. 0.08), and 1/_fScale alone would blow badges up ~12x at the
+// very view where they're supposed to look normal-sized.
+let _fFitScale = 1;
 let _fPinching = false, _fPinchDist = 0, _fPinchScale = 1;
 let _fDragging = false, _fDragStart = null;
 let _fPointers = {};
@@ -14,10 +19,11 @@ function _fCanvas() { return document.getElementById('fieldDrawingCanvas'); }
 
 function _fApply() {
   _fLayer().style.transform = `translate(${_fPanX}px,${_fPanY}px) scale(${_fScale})`;
-  // Keep finding badges a constant on-screen size regardless of drawing zoom —
-  // see the --zoom comment on .finding-badge in styles.css.
+  // Badges look normal-sized at the initial fit view (zoom ratio 1) and
+  // shrink as you zoom in further — see the --zoom comment on .finding-badge
+  // in styles.css. Relative to _fFitScale, not a raw scale of 1.
   const bl = document.getElementById('fieldBadgeLayer');
-  if (bl) bl.style.setProperty('--zoom', String(1 / _fScale));
+  if (bl) bl.style.setProperty('--zoom', String(_fFitScale / _fScale));
 }
 function _fZoom(cx, cy, factor) {
   const ns = Math.min(8, Math.max(0.2, _fScale * factor));
@@ -42,6 +48,7 @@ function _fFit(_retries) {
     return;
   }
   _fScale = Math.min(vw/iw, vh/ih) * 0.95;
+  _fFitScale = _fScale;
   _fPanX = (vw - iw*_fScale)/2; _fPanY = (vh - ih*_fScale)/2;
   _fApply();
 }
