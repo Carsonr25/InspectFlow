@@ -764,10 +764,14 @@ async function loadPlans() {
     if (loose.length > 0) {
       html += `<div style="margin-top:${jobs.length>0?'24px':'0'};"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Unassigned Plans</div>
       <div class="plans-grid">${loose.map(f => {
-        const enc  = encodeURIComponent(f.name);
-        const date = f.created_at ? new Date(f.created_at).toLocaleDateString() : '';
+        const enc   = encodeURIComponent(f.name);
+        const date  = f.created_at ? new Date(f.created_at).toLocaleDateString() : '';
+        const fSafe = f.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
         return `<div class="plan-card">
-          <div class="plan-icon">📄</div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div class="plan-icon">📄</div>
+            <button class="dots-btn" onclick="event.stopPropagation();openCtxMenu(event,{type:'unassigned',name:'${fSafe}'})" title="Options">⋯</button>
+          </div>
           <div class="plan-name" title="${f.name}">${f.name}</div>
           <div class="plan-date">${date}</div>
           <button class="dash-new-btn" style="font-size:11px;padding:5px 10px;margin-top:6px;width:100%;" onclick="assignToJob('${enc}')">Assign to job</button>

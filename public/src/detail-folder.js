@@ -604,6 +604,10 @@ async function ctxAction(action) {
       const newName = prompt('Rename job:', t.job);
       if (!newName || newName === t.job) return;
       await renameJob(t.job, newName.trim());
+    } else if (t.type === 'unassigned') {
+      const newName = prompt('Rename plan:', t.name.replace(/\.pdf$/i,''));
+      if (!newName) return;
+      await renameUnassignedPlan(t.name, newName.trim() + '.pdf');
     } else {
       const newName = prompt('Rename plan:', t.name.replace(/\.pdf$/i,''));
       if (!newName) return;
@@ -618,10 +622,30 @@ async function ctxAction(action) {
   } else if (action === 'delete') {
     if (t.type === 'job') {
       await deleteJob(encodeURIComponent(t.job));
+    } else if (t.type === 'unassigned') {
+      await deleteUnassignedPlan(t.name);
     } else {
       await deleteStoredPlan(encodeURIComponent(t.job), encodeURIComponent(t.disc), encodeURIComponent(t.name));
     }
   }
+}
+
+async function renameUnassignedPlan(oldName, newName) {
+  const oldPath = `${_sbUser.id}/${oldName}`;
+  const newPath = `${_sbUser.id}/${newName}`;
+  const { data: blob, error: dlErr } = await _sb.storage.from('plans').download(oldPath);
+  if (dlErr || !blob) { alert('Could not download file to rename.'); return; }
+  const { error: upErr } = await _sb.storage.from('plans').upload(newPath, blob, { upsert: true });
+  if (upErr) { alert('Rename failed: ' + upErr.message); return; }
+  await _sb.storage.from('plans').remove([oldPath]);
+  loadPlans();
+}
+
+async function deleteUnassignedPlan(name) {
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  const { error } = await _sb.storage.from('plans').remove([`${_sbUser.id}/${name}`]);
+  if (error) { alert('Delete failed: ' + error.message); return; }
+  loadPlans();
 }
 
 async function renameJob(oldName, newName) {
