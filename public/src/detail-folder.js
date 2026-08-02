@@ -516,27 +516,30 @@ async function confirmTypesAndCreateInspection() {
 
   if (types.length === 0) { doExportToFieldApp(); return; }
 
+  // Strict no-hallucination policy: descriptions are only ever generated from
+  // an actual highlighted legend/detail image. No legend captured means no
+  // AI-generated description at all — manually-typed notes (t.description,
+  // set earlier from the item's Details field) are untouched either way.
+  const legendSession = qaqcSession.find(s => !s.isTextSearch && s.detailImg);
+  if (!legendSession) { doExportToFieldApp(); return; }
+
   showStatus('AI is reading the details for field descriptions…', true);
 
   try {
-    // Read the actual detail/legend image so descriptions cite real specs
-    // (size, length, embedment, fastener count) instead of just guessing
-    // from the type's name — this was the gap: the old version never sent
-    // the legend to the model at all, so it could only describe generically.
-    const legendSession = qaqcSession.find(s => !s.isTextSearch && s.detailImg);
-    const msgContent = [];
-    if (legendSession) {
-      msgContent.push({ type:'image', source:{ type:'base64', media_type:'image/jpeg', data: legendSession.detailImg.split(',')[1] } });
-      msgContent.push({ type:'text', text:'LEGEND IMAGE: the detail / keynote schedule for these symbol types.' });
-    }
-    msgContent.push({ type:'text', text: `You are helping a field inspector identify construction symbols on drawings.
-For each type below, ${legendSession ? 'read the legend image above to find its specific callout' : 'describe what it physically looks like'} — size, length, embedment depth, fastener count/spec, material, or connection type. Write ONE concise sentence (max 25 words) telling the inspector exactly what to verify in the field, using the ACTUAL values from the legend when they're visible for that type. If the legend doesn't cover a given type, describe the symbol generically instead of inventing numbers.
+    const msgContent = [
+      { type:'image', source:{ type:'base64', media_type:'image/jpeg', data: legendSession.detailImg.split(',')[1] } },
+      { type:'text', text:'LEGEND IMAGE: the detail / keynote schedule for these symbol types.' },
+      { type:'text', text: `You are helping a field inspector identify construction symbols on drawings.
+For each type below, look for it specifically in the legend image above. If you find it, write ONE concise sentence (max 25 words) using the ACTUAL values shown — size, length, embedment depth, fastener count/spec, material, or connection type. Real values only, never invented or estimated.
+
+If a type is NOT covered by the legend, return an empty string "" for its description — do not describe it generically or guess. Only report what the legend actually shows.
 
 Types:
 ${types.map((t,i) => `${i+1}. "${t.name}" (typeKey: "${t.typeKey}", from scan: "${t.query}")`).join('\n')}
 
 Return ONLY valid JSON, no markdown, no explanation:
-{"types":[{"typeKey":"...","description":"..."}]}` });
+{"types":[{"typeKey":"...","description":"..."}]}` }
+    ];
 
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',

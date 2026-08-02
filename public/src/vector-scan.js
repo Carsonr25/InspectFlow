@@ -3722,7 +3722,7 @@ STEP 2 — Group circles showing the SAME item into one type. Circles that diffe
 
 STEP 3 — Key each type by its printed designator when one exists, using the bare character ("4", not "Type 4"). If no designator is visible, key the types "1", "2", "3"… in the order you encounter them.
 
-STEP 4 — Give every type a short descriptive name in "name" saying what the item actually is, using the detail legend if one was provided. Examples: "Type 4 Hold Down", "HDU8 Hold Down", "Double-bolt Anchor". If you genuinely cannot tell, fall back to "${s.query}".
+STEP 4 — Give every type a short descriptive name in "name". If a detail legend was provided and covers this type, use its real designator/spec (e.g. "HDU8 Hold Down"). Otherwise describe only what's visibly true from the crops themselves (shape/form, e.g. "Double-bolt Anchor") — never invent a product name, spec number, or manufacturer that isn't actually visible. If you can't describe it from what's visible, fall back to "${s.query}".
 
 STEP 5 — Every circle number must appear in exactly one type.
 
@@ -3809,19 +3809,30 @@ Every circle number must appear in exactly one type.`});
       }
     }
 
-    // Generate questions for text search scans — only when a detail image exists and user opted in
+    // Generate questions for text search scans — ONLY when a detail/legend
+    // image exists, and only grounded in what that image actually shows.
+    // Previously this ran off just the callout's NAME with no image at all —
+    // pure invention from the model's general construction knowledge, not
+    // from anything the user actually provided. Per policy: no legend means
+    // no generated questions, full stop.
     const textScans=qaqcSession.filter(s=>s.isTextSearch);
     if(textScans.length>0&&includeAIQuestions&&legendSession){
       try{
         const tqPrompt=textScans.map(s=>`"${s.query}" (${s.findingsCount} instance${s.findingsCount!==1?'s':''})`).join(', ');
-        const tqResp=await fetch('https://api.anthropic.com/v1/messages',{
-          method:'POST',
-          headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
-          body:JSON.stringify({model:aiModel,max_tokens:800,messages:[{role:'user',content:`You are a construction field inspector. For each of these callout types found on a drawing, write exactly 4 practical field inspection questions a site inspector would ask. Keep questions concise and specific.
+        const tqMsgContent=[
+          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:legendSession.detailImg.split(',')[1]}},
+          {type:'text',text:`LEGEND IMAGE: the detail / keynote schedule.
+
+For each callout below, look for it specifically in the legend image above. If you find it, write up to 4 field inspection questions grounded ONLY in what that legend entry actually shows (size, spec, material, connection, etc. — real values only, never invented). If a callout is NOT covered by the legend, return an empty array for it — do not write generic questions from the name alone.
 
 Callout types: ${tqPrompt}
 
-Respond ONLY with valid JSON: {"calloutName": ["Q1?","Q2?","Q3?","Q4?"], ...}`}]})
+Respond ONLY with valid JSON: {"calloutName": ["Q1?","Q2?","Q3?","Q4?"], ...}`}
+        ];
+        const tqResp=await fetch('https://api.anthropic.com/v1/messages',{
+          method:'POST',
+          headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
+          body:JSON.stringify({model:aiModel,max_tokens:800,messages:[{role:'user',content:tqMsgContent}]})
         });
         if(tqResp.ok){
           const tqData=await tqResp.json();
