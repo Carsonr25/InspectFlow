@@ -19,10 +19,22 @@ function _fZoom(cx, cy, factor) {
   _fPanX = cx - r*(cx - _fPanX); _fPanY = cy - r*(cy - _fPanY);
   _fScale = ns; _fApply();
 }
-function _fFit() {
+function _fFit(_retries) {
   const vw = _fViewer().clientWidth, vh = _fViewer().clientHeight;
   const iw = _fCanvas().width, ih = _fCanvas().height;
   if (!iw || !ih) return;
+  // The viewer container can still report 0 size for a frame or two right
+  // after showField() flips it to display:flex — mobile Safari in particular
+  // doesn't always have the flex layout settled by the time this runs. That
+  // silently produced scale = Math.min(0/iw, 0/ih) = 0, i.e. the drawing was
+  // rendered correctly but made invisible (scale(0)), with no error thrown
+  // anywhere — exactly the "blank, no crash" symptom. Retry a few frames
+  // instead of computing a zero scale.
+  if (!vw || !vh) {
+    const n = (_retries || 0) + 1;
+    if (n <= 30) requestAnimationFrame(() => _fFit(n));
+    return;
+  }
   _fScale = Math.min(vw/iw, vh/ih) * 0.95;
   _fPanX = (vw - iw*_fScale)/2; _fPanY = (vh - ih*_fScale)/2;
   _fApply();
