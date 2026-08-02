@@ -649,10 +649,41 @@ let _currentJob = null, _currentDisc = null;
 let _existingJobs = []; // cached list for picker
 let _pendingFile  = null; // file waiting for job/disc assignment
 
-const DISC_ICONS = {
-  'Architectural':'🏛','Structural':'🏗','Mechanical':'⚙️','Electrical':'⚡',
-  'Plumbing':'🔧','Civil':'🛣','Fire Protection':'🔥','Other':'📁'
-};
+const DEFAULT_DISCIPLINES = ['Architectural','Structural','Mechanical','Electrical','Plumbing','Civil','Fire Protection','Other'];
+
+function getAllDisciplines() {
+  const custom = JSON.parse(localStorage.getItem('inspectflow_custom_disciplines') || '[]');
+  const merged = [...DEFAULT_DISCIPLINES];
+  custom.forEach(d => { if (!merged.includes(d)) merged.push(d); });
+  return merged;
+}
+function addCustomDiscipline(name) {
+  if (DEFAULT_DISCIPLINES.includes(name)) return;
+  const custom = JSON.parse(localStorage.getItem('inspectflow_custom_disciplines') || '[]');
+  if (!custom.includes(name)) { custom.push(name); localStorage.setItem('inspectflow_custom_disciplines', JSON.stringify(custom)); }
+}
+
+// Per-job discipline display order, persisted locally (storage.list() has no
+// concept of user-chosen order). Discs not yet in the saved order are
+// appended in their natural (listing) order, so newly-added disciplines
+// still show up without needing to be explicitly ordered first.
+function _discOrderKey(job) { return `inspectflow_disc_order_${job}`; }
+function getDisciplineOrder(job, discNames) {
+  let saved = JSON.parse(localStorage.getItem(_discOrderKey(job)) || '[]');
+  saved = saved.filter(d => discNames.includes(d));
+  discNames.forEach(d => { if (!saved.includes(d)) saved.push(d); });
+  return saved;
+}
+function moveDiscipline(job, discName, dir) {
+  const order = getDisciplineOrder(job, _lastDiscNames || []);
+  const i = order.indexOf(discName);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  localStorage.setItem(_discOrderKey(job), JSON.stringify(order));
+  loadDisciplines(encodeURIComponent(job));
+}
+let _lastDiscNames = [];
 
 function _updateBreadcrumb() {
   const bc  = document.getElementById('plansBreadcrumb');
@@ -685,8 +716,29 @@ async function loadPlans() {
     if (error) throw error;
     const all  = (data || []).filter(f => f.name && !f.name.startsWith('.'));
     const jobs  = all.filter(f => f.metadata == null); // folders
-    const loose = all.filter(f => f.metadata != null); // flat files (old format)
+    let loose = all.filter(f => f.metadata != null); // flat files (old format)
     _existingJobs = jobs.map(j => j.name);
+
+    // A plan that already lives inside a job/discipline folder shouldn't
+    // also show as "unassigned" — this happened when assignToJob's move
+    // silently failed to remove the old flat copy (no error check on the
+    // remove() call). Cross-check names against every job's files and drop
+    // (and opportunistically delete) any stale duplicate.
+    if (loose.length > 0 && jobs.length > 0) {
+      const assignedNames = new Set();
+      await Promise.all(jobs.map(async j => {
+        const { data: discs } = await _sb.storage.from('plans').list(`${_sbUser.id}/${j.name}/`);
+        await Promise.all((discs || []).filter(d => d.metadata == null).map(async d => {
+          const { data: files } = await _sb.storage.from('plans').list(`${_sbUser.id}/${j.name}/${d.name}/`);
+          (files || []).forEach(f => { if (f.metadata != null) assignedNames.add(f.name); });
+        }));
+      }));
+      const stale = loose.filter(f => assignedNames.has(f.name));
+      if (stale.length) {
+        _sb.storage.from('plans').remove(stale.map(f => `${_sbUser.id}/${f.name}`)).catch(() => {});
+      }
+      loose = loose.filter(f => !assignedNames.has(f.name));
+    }
 
     let html = '';
 
@@ -736,12 +788,15 @@ async function assignToJob(encodedName) {
 }
 
 async function confirmJobPicker() {
-  const sel  = document.getElementById('jobPickerJobSelect');
-  const inp  = document.getElementById('jobPickerJobInput');
-  const disc = document.getElementById('jobPickerDisc').value;
-  let job = sel.value === '__new__' ? inp.value.trim() : sel.value;
+  const sel     = document.getElementById('jobPickerJobSelect');
+  const inp     = document.getElementById('jobPickerJobInput');
+  const discSel = document.getElementById('jobPickerDisc');
+  const discInp = document.getElementById('jobPickerDiscInput');
+  let job  = sel.value === '__new__' ? inp.value.trim() : sel.value;
+  let disc = discSel.value === '__new__' ? discInp.value.trim() : discSel.value;
   if (!job) { alert('Please enter or select a job name.'); return; }
-  if (!disc) { alert('Please select a discipline.'); return; }
+  if (!disc) { alert('Please enter or select a discipline.'); return; }
+  if (discSel.value === '__new__') addCustomDiscipline(disc);
   if (!_pendingFile) { closeJobPicker(); return; }
 
   const pf = _pendingFile;
@@ -752,8 +807,10 @@ async function confirmJobPicker() {
     const newPath = `${_sbUser.id}/${job}/${disc}/${pf._name}`;
     const { data: dlData, error: dlErr } = await _sb.storage.from('plans').download(pf._oldPath);
     if (dlErr) { alert('Could not move plan: ' + dlErr.message); return; }
-    await _sb.storage.from('plans').upload(newPath, dlData, { upsert: true });
-    await _sb.storage.from('plans').remove([pf._oldPath]);
+    const { error: upErr } = await _sb.storage.from('plans').upload(newPath, dlData, { upsert: true });
+    if (upErr) { alert('Could not move plan: ' + upErr.message); return; }
+    const { error: rmErr } = await _sb.storage.from('plans').remove([pf._oldPath]);
+    if (rmErr) console.warn('[QAQC] Old unassigned copy could not be removed after move:', rmErr.message);
     if (!_existingJobs.includes(job)) _existingJobs.push(job);
     loadPlans();
   } else {
@@ -783,15 +840,19 @@ async function loadDisciplines(encodedJob) {
       return;
     }
     // Load all disciplines and their files in parallel
-    const sections = await Promise.all(discs.map(async d => {
+    let sections = await Promise.all(discs.map(async d => {
       const prefix = `${_sbUser.id}/${_currentJob}/${d.name}/`;
       const { data: files } = await _sb.storage.from('plans').list(prefix, { sortBy:{ column:'created_at', order:'desc' } });
       return { disc: d.name, files: (files || []).filter(f => f.name && !f.name.startsWith('.') && f.metadata != null) };
     }));
+    _lastDiscNames = sections.map(s => s.disc);
+    const order = getDisciplineOrder(_currentJob, _lastDiscNames);
+    sections = order.map(name => sections.find(s => s.disc === name)).filter(Boolean);
     const ej = encodeURIComponent(_currentJob);
-    grid.innerHTML = sections.map(({ disc, files }) => {
-      const icon = DISC_ICONS[disc] || '📁';
+    grid.innerHTML = sections.map(({ disc, files }, idx) => {
       const ed   = encodeURIComponent(disc);
+      const jSafeOrd = _currentJob.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const dSafeOrd = disc.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       const filesHtml = files.length === 0
         ? `<div style="font-size:12px;color:var(--text3);padding:8px 0;">No plans yet</div>`
         : `<div class="plans-grid">${files.map(f => {
@@ -811,9 +872,12 @@ async function loadDisciplines(encodedJob) {
           }).join('')}</div>`;
       return `<div style="margin-bottom:24px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1.5px solid var(--border);">
-          <span style="font-size:18px;">${icon}</span>
           <span style="font-size:13px;font-weight:700;color:var(--text);">${disc}</span>
           <span style="font-size:11px;color:var(--text3);margin-left:4px;">${files.length} plan${files.length!==1?'s':''}</span>
+          <div style="margin-left:auto;display:flex;gap:2px;">
+            <button onclick="moveDiscipline('${jSafeOrd}','${dSafeOrd}',-1)" ${idx===0?'disabled':''} title="Move up" style="background:none;border:1px solid var(--border);border-radius:4px;width:22px;height:22px;cursor:${idx===0?'default':'pointer'};color:${idx===0?'var(--text3)':'var(--text2)'};font-size:11px;line-height:1;">↑</button>
+            <button onclick="moveDiscipline('${jSafeOrd}','${dSafeOrd}',1)" ${idx===sections.length-1?'disabled':''} title="Move down" style="background:none;border:1px solid var(--border);border-radius:4px;width:22px;height:22px;cursor:${idx===sections.length-1?'default':'pointer'};color:${idx===sections.length-1?'var(--text3)':'var(--text2)'};font-size:11px;line-height:1;">↓</button>
+          </div>
         </div>
         ${filesHtml}
       </div>`;
@@ -897,8 +961,14 @@ async function openJobPicker() {
   sel.innerHTML += '<option value="__new__">+ New job…</option>';
   // Pre-select current job if we're inside one
   if (_currentJob) sel.value = _currentJob;
-  // Pre-select current discipline
-  if (_currentDisc) document.getElementById('jobPickerDisc').value = _currentDisc;
+
+  // Populate discipline dropdown (defaults + any custom ones added before)
+  const discSel = document.getElementById('jobPickerDisc');
+  discSel.innerHTML = getAllDisciplines().map(d => `<option value="${d}">${d}</option>`).join('')
+    + '<option value="__new__">+ New discipline…</option>';
+  if (_currentDisc) discSel.value = _currentDisc;
+  document.getElementById('jobPickerDiscInput').style.display = 'none';
+
   document.getElementById('jobPickerJobInput').style.display = 'none';
   document.getElementById('jobPickerOverlay').classList.add('open');
 }
@@ -910,6 +980,12 @@ function closeJobPicker() {
 
 function jobPickerJobChange(sel) {
   const inp = document.getElementById('jobPickerJobInput');
+  inp.style.display = sel.value === '__new__' ? 'block' : 'none';
+  if (sel.value === '__new__') inp.focus();
+}
+
+function jobPickerDiscChange(sel) {
+  const inp = document.getElementById('jobPickerDiscInput');
   inp.style.display = sel.value === '__new__' ? 'block' : 'none';
   if (sel.value === '__new__') inp.focus();
 }

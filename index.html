@@ -95,9 +95,6 @@
       <input type="password" id="authPw" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitAuth()" />
     </div>
     <button class="auth-submit" id="authSubmitBtn" onclick="submitAuth()">Log in</button>
-    <div style="text-align:center;margin-top:14px;">
-      <button onclick="showTool()" style="font-size:12px;color:var(--text3);background:none;border:none;cursor:pointer;font-family:inherit;text-decoration:underline;">Use without account</button>
-    </div>
   </div>
 </div>
 
@@ -171,6 +168,7 @@
 <div id="ctxMenu">
   <button class="ctx-item" id="ctxRename" onclick="ctxAction('rename')">✏️ Rename</button>
   <button class="ctx-item" id="ctxMove" onclick="ctxAction('move')" style="display:none;">📂 Move to…</button>
+  <button class="ctx-item" id="ctxDuplicate" onclick="ctxAction('duplicate')" style="display:none;">⧉ Duplicate</button>
   <button class="ctx-item danger" id="ctxDelete" onclick="ctxAction('delete')">✕ Delete</button>
 </div>
 
@@ -188,16 +186,8 @@
     </div>
     <div>
       <div class="job-picker-label">Discipline</div>
-      <select id="jobPickerDisc" class="job-picker-select">
-        <option value="Architectural">🏛 Architectural</option>
-        <option value="Structural">🏗 Structural</option>
-        <option value="Mechanical">⚙️ Mechanical</option>
-        <option value="Electrical">⚡ Electrical</option>
-        <option value="Plumbing">🔧 Plumbing</option>
-        <option value="Civil">🛣 Civil</option>
-        <option value="Fire Protection">🔥 Fire Protection</option>
-        <option value="Other">📁 Other</option>
-      </select>
+      <select id="jobPickerDisc" class="job-picker-select" onchange="jobPickerDiscChange(this)"></select>
+      <input type="text" id="jobPickerDiscInput" class="job-picker-input" placeholder="Enter discipline name" style="display:none;margin-top:8px;" />
     </div>
     <div class="job-picker-btns">
       <button class="job-picker-cancel" onclick="closeJobPicker()">Cancel</button>

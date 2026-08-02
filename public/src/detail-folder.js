@@ -581,10 +581,11 @@ function openCtxMenu(e, target) {
   _ctxTarget = target;
   const menu = document.getElementById('ctxMenu');
   document.getElementById('ctxMove').style.display = target.type === 'plan' ? 'flex' : 'none';
+  document.getElementById('ctxDuplicate').style.display = target.type === 'plan' ? 'flex' : 'none';
   menu.classList.add('open');
   // Position near the button
   const r = e.currentTarget.getBoundingClientRect();
-  const mw = 170, mh = target.type === 'plan' ? 110 : 78;
+  const mw = 170, mh = target.type === 'plan' ? 144 : 78;
   let left = r.left, top = r.bottom + 4;
   if (left + mw > window.innerWidth - 8) left = r.right - mw;
   if (top + mh > window.innerHeight - 8) top = r.top - mh - 4;
@@ -612,6 +613,8 @@ async function ctxAction(action) {
     // Reuse job picker in move mode
     _pendingFile = { _isMove: true, _oldPath: `${_sbUser.id}/${t.job}/${t.disc}/${t.name}`, _name: t.name };
     await openJobPicker();
+  } else if (action === 'duplicate') {
+    await duplicatePlan(t.job, t.disc, t.name);
   } else if (action === 'delete') {
     if (t.type === 'job') {
       await deleteJob(encodeURIComponent(t.job));
@@ -647,6 +650,24 @@ async function renamePlan(job, disc, oldName, newName) {
   if (!blob) { alert('Could not download file to rename.'); return; }
   await _sb.storage.from('plans').upload(newPath, blob, { upsert: true });
   await _sb.storage.from('plans').remove([oldPath]);
+  loadDisciplines(encodeURIComponent(job));
+}
+
+async function duplicatePlan(job, disc, name) {
+  const path = `${_sbUser.id}/${job}/${disc}/${name}`;
+  const { data: blob, error: dlErr } = await _sb.storage.from('plans').download(path);
+  if (dlErr || !blob) { alert('Could not duplicate: ' + (dlErr?.message||'download failed')); return; }
+  const dot = name.lastIndexOf('.');
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  const ext  = dot > 0 ? name.slice(dot) : '';
+  let copyName = `${base} (copy)${ext}`;
+  // Avoid clobbering an existing "(copy)" — check the folder listing first.
+  const { data: files } = await _sb.storage.from('plans').list(`${_sbUser.id}/${job}/${disc}/`);
+  const existing = new Set((files||[]).map(f=>f.name));
+  let n = 2;
+  while (existing.has(copyName)) { copyName = `${base} (copy ${n})${ext}`; n++; }
+  const { error: upErr } = await _sb.storage.from('plans').upload(`${_sbUser.id}/${job}/${disc}/${copyName}`, blob);
+  if (upErr) { alert('Could not duplicate: ' + upErr.message); return; }
   loadDisciplines(encodeURIComponent(job));
 }
 
