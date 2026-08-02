@@ -392,10 +392,11 @@
 
   /* ── Field viewer: finding badges ── */
   .finding-badge {
-    /* --zoom is set by _fApply() to 1/_fScale so badges stay a constant
-       on-screen size regardless of how far the drawing is zoomed in —
-       without it, badge size scales up with the drawing's own zoom. */
-    position: absolute; transform: translate(-50%, -50%) scale(var(--zoom, 1));
+    /* Lives OUTSIDE #fieldDrawingLayer's zoom transform now (sibling, not
+       child — see index.html), with left/top recomputed in real screen
+       pixels by _fApply() on every pan/zoom. So this size is a genuine,
+       constant on-screen size at all times — no counter-scaling needed. */
+    position: absolute; transform: translate(-50%, -50%);
     width: 60px; height: 60px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-size: 22px; font-weight: 800; color: #fff;
@@ -407,7 +408,7 @@
   .finding-badge.has-data { border-color: #fff; }
   .finding-badge.passed { outline: 3px solid var(--green); }
   .finding-badge.failed { outline: 3px solid var(--red); }
-  .finding-badge:active { transform: translate(-50%,-50%) scale(calc(var(--zoom, 1) * 0.9)); }
+  .finding-badge:active { transform: translate(-50%,-50%) scale(0.9); }
   .finding-badge .check {
     position: absolute; top: -6px; right: -6px;
     width: 24px; height: 24px; border-radius: 50%;

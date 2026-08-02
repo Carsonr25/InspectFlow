@@ -681,8 +681,12 @@
   <div id="fieldViewerWrap">
     <div id="fieldDrawingLayer">
       <canvas id="fieldDrawingCanvas"></canvas>
-      <div id="fieldBadgeLayer"></div>
     </div>
+    <!-- Sibling of the transformed drawing layer, NOT a child — badges are
+         positioned in real screen pixels (computed in _fApply()) so their
+         own size is completely unaffected by the drawing's zoom transform,
+         instead of inheriting it and needing a compensating counter-scale. -->
+    <div id="fieldBadgeLayer"></div>
     <!-- Scrim + sheet inside viewer so they scroll with it -->
     <div id="fieldScrim" onclick="closeFieldSheet()"></div>
     <div id="fieldSheet">

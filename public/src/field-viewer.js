@@ -3,14 +3,14 @@
 // ═══════════════════════════════════════════════════════════════════
 let _fieldData = null, _fieldActiveIdx = null, _fieldCurrentPath = null;
 let _fScale = 1, _fPanX = 0, _fPanY = 0;
-// Scale at the initial "fit whole sheet on screen" view — badges are sized
-// relative to THIS, not to a raw 1:1 scale of 1. A big sheet fits at a tiny
-// scale (e.g. 0.08), and 1/_fScale alone would blow badges up ~12x at the
-// very view where they're supposed to look normal-sized.
-let _fFitScale = 1;
 let _fPinching = false, _fPinchDist = 0, _fPinchScale = 1;
 let _fDragging = false, _fDragStart = null;
 let _fPointers = {};
+// Badge screen positions are recomputed from these canvas-space (fixed)
+// coordinates on every pan/zoom — see _fApply(). Badges live OUTSIDE the
+// transformed drawing layer now (sibling in the DOM, see index.html), so
+// their own CSS size is completely unaffected by the drawing's zoom.
+let _fBadgePts = []; // [{el, cx, cy}]
 
 // Lazy getters — elements live inside #fieldWrap which isn't in DOM at script parse time
 function _fViewer() { return document.getElementById('fieldViewerWrap'); }
@@ -19,11 +19,14 @@ function _fCanvas() { return document.getElementById('fieldDrawingCanvas'); }
 
 function _fApply() {
   _fLayer().style.transform = `translate(${_fPanX}px,${_fPanY}px) scale(${_fScale})`;
-  // Badges look normal-sized at the initial fit view (zoom ratio 1) and
-  // shrink as you zoom in further — see the --zoom comment on .finding-badge
-  // in styles.css. Relative to _fFitScale, not a raw scale of 1.
-  const bl = document.getElementById('fieldBadgeLayer');
-  if (bl) bl.style.setProperty('--zoom', String(_fFitScale / _fScale));
+  // Badges are positioned in real screen pixels, mapped from their fixed
+  // canvas-space point through the current pan/scale — same math the CSS
+  // transform above does for the drawing, just applied manually so the
+  // badge elements themselves never get any scale applied to their size.
+  _fBadgePts.forEach(({el, cx, cy}) => {
+    el.style.left = (cx * _fScale + _fPanX) + 'px';
+    el.style.top  = (cy * _fScale + _fPanY) + 'px';
+  });
 }
 function _fZoom(cx, cy, factor) {
   const ns = Math.min(8, Math.max(0.2, _fScale * factor));
@@ -48,7 +51,6 @@ function _fFit(_retries) {
     return;
   }
   _fScale = Math.min(vw/iw, vh/ih) * 0.95;
-  _fFitScale = _fScale;
   _fPanX = (vw - iw*_fScale)/2; _fPanY = (vh - ih*_fScale)/2;
   _fApply();
 }
@@ -183,21 +185,25 @@ function _fDrawLoadError() {
 function renderFieldBadges() {
   const bl = document.getElementById('fieldBadgeLayer');
   bl.innerHTML = '';
+  _fBadgePts = [];
   const iw = _fCanvas().width, ih = _fCanvas().height;
   _fieldData.findings.forEach((f, i) => {
     const b = document.createElement('div');
     b.className = 'finding-badge' +
       (f.status==='pass'?' passed':f.status==='fail'?' failed':'') +
       ((f.notes||f.photos.length)?' has-data':'');
-    b.style.cssText = `left:${f.xPct*iw}px;top:${f.yPct*ih}px;background:${f.color||'#0d9488'};`;
-    const sz = Math.max(iw,ih)*0.022;
-    b.style.width = sz+'px'; b.style.height = sz+'px'; b.style.fontSize = (sz*0.38)+'px';
+    // Fixed CSS size only (see .finding-badge) — no inline width/height tied
+    // to canvas size, so badges are a real constant on-screen size always,
+    // not just at one particular zoom level.
+    b.style.background = f.color || '#0d9488';
     b.textContent = i+1;
     const ck = document.createElement('div'); ck.className='check';
     ck.textContent = f.status==='pass'?'✓':'✗'; b.appendChild(ck);
     b.addEventListener('click', e => { e.stopPropagation(); openFieldSheet(i); });
     bl.appendChild(b);
+    _fBadgePts.push({ el: b, cx: f.xPct*iw, cy: f.yPct*ih });
   });
+  _fApply(); // position the freshly-created badges at the current pan/zoom
 }
 
 function updateFieldProgress() {
