@@ -135,32 +135,26 @@ function renderFieldDrawing() {
   // dimensions — that default was passing this check and rendering a blank
   // canvas instead of falling back, so the threshold needs to clear it.
   if (pdfCanvas && pdfCanvas.width > 400 && pdfCanvas.height > 400) {
-    alert('[DEBUG] branch=LIVE ' + pdfCanvas.width + 'x' + pdfCanvas.height);
     const {w, h} = _fSafeCanvasSize(pdfCanvas.width, pdfCanvas.height);
     fc.width = w; fc.height = h;
     fc.getContext('2d').drawImage(pdfCanvas, 0, 0, w, h);
     _fFit(); renderFieldBadges(); updateFieldProgress();
   } else {
-    alert('[DEBUG] branch=IMG stored ' + _fieldData.imageWidth + 'x' + _fieldData.imageHeight + ' len=' + ((_fieldData.imageDataUrl||'').length));
     const img = new Image();
     let settled = false;
     const fail = (reason) => {
       if (settled) return;
       settled = true;
-      alert('[DEBUG] FAILED: ' + reason);
       console.warn('[QAQC] field drawing image failed to load:', reason);
       _fDrawLoadError();
     };
     img.onload = () => {
       if (settled) return;
       settled = true;
-      alert('[DEBUG] onload OK natural=' + img.naturalWidth + 'x' + img.naturalHeight);
       const {w, h} = _fSafeCanvasSize(img.naturalWidth, img.naturalHeight);
       fc.width = w; fc.height = h;
       fc.getContext('2d').drawImage(img, 0, 0, w, h);
-      alert('[DEBUG] canvas=' + fc.width + 'x' + fc.height + ' viewer=' + _fViewer().clientWidth + 'x' + _fViewer().clientHeight);
       _fFit(); renderFieldBadges(); updateFieldProgress();
-      alert('[DEBUG] scale=' + _fScale + ' fitScale=' + _fFitScale + ' panX=' + _fPanX + ' panY=' + _fPanY);
     };
     img.onerror = () => fail('onerror');
     // Some mobile browsers neither fire onload nor onerror when they give up

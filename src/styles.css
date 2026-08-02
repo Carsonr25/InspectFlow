@@ -396,9 +396,9 @@
        on-screen size regardless of how far the drawing is zoomed in —
        without it, badge size scales up with the drawing's own zoom. */
     position: absolute; transform: translate(-50%, -50%) scale(var(--zoom, 1));
-    width: 32px; height: 32px; border-radius: 50%;
+    width: 42px; height: 42px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 800; color: #fff;
+    font-size: 15px; font-weight: 800; color: #fff;
     box-shadow: 0 2px 8px rgba(0,0,0,0.4);
     cursor: pointer; border: 2.5px solid rgba(255,255,255,0.6);
     transition: transform 0.1s; user-select: none;
@@ -409,9 +409,9 @@
   .finding-badge.failed { outline: 3px solid var(--red); }
   .finding-badge:active { transform: translate(-50%,-50%) scale(calc(var(--zoom, 1) * 0.9)); }
   .finding-badge .check {
-    position: absolute; top: -4px; right: -4px;
-    width: 14px; height: 14px; border-radius: 50%;
-    font-size: 8px; font-weight: 900; display: none;
+    position: absolute; top: -5px; right: -5px;
+    width: 18px; height: 18px; border-radius: 50%;
+    font-size: 10px; font-weight: 900; display: none;
     align-items: center; justify-content: center;
   }
   .finding-badge.passed .check { display: flex; background: var(--green); }
