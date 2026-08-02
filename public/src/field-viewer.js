@@ -96,11 +96,15 @@ function _fAttachEvents() {
 // that renders fine on desktop can go blank on a phone. 4096x4096 (~16.7M
 // px) is a conservative ceiling that's safe across mobile browsers; scale
 // down to fit within it rather than drawing 1:1.
-const _F_MAX_CANVAS_AREA = 4096 * 4096;
+// Confirmed via on-device debugging: a 4847x3462 canvas (total area under
+// the old 4096x4096 *area* budget) still rendered blank on iPhone Safari.
+// Mobile GPUs cap canvas/texture size per INDIVIDUAL DIMENSION, not total
+// area — a common real-world limit is 4096px on any one side. A wide-but-
+// short image can pass an area check while still failing because its width
+// alone exceeds that. Cap each dimension independently instead.
+const _F_MAX_CANVAS_DIM = 4096;
 function _fSafeCanvasSize(w, h) {
-  const area = w * h;
-  if (area <= _F_MAX_CANVAS_AREA) return { w, h };
-  const scale = Math.sqrt(_F_MAX_CANVAS_AREA / area);
+  const scale = Math.min(1, _F_MAX_CANVAS_DIM / w, _F_MAX_CANVAS_DIM / h);
   return { w: Math.round(w * scale), h: Math.round(h * scale) };
 }
 
