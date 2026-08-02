@@ -12,7 +12,13 @@ function _fViewer() { return document.getElementById('fieldViewerWrap'); }
 function _fLayer()  { return document.getElementById('fieldDrawingLayer'); }
 function _fCanvas() { return document.getElementById('fieldDrawingCanvas'); }
 
-function _fApply() { _fLayer().style.transform = `translate(${_fPanX}px,${_fPanY}px) scale(${_fScale})`; }
+function _fApply() {
+  _fLayer().style.transform = `translate(${_fPanX}px,${_fPanY}px) scale(${_fScale})`;
+  // Keep finding badges a constant on-screen size regardless of drawing zoom —
+  // see the --zoom comment on .finding-badge in styles.css.
+  const bl = document.getElementById('fieldBadgeLayer');
+  if (bl) bl.style.setProperty('--zoom', String(1 / _fScale));
+}
 function _fZoom(cx, cy, factor) {
   const ns = Math.min(8, Math.max(0.2, _fScale * factor));
   const r = ns / _fScale;
@@ -122,32 +128,26 @@ function renderFieldDrawing() {
   // dimensions — that default was passing this check and rendering a blank
   // canvas instead of falling back, so the threshold needs to clear it.
   if (pdfCanvas && pdfCanvas.width > 400 && pdfCanvas.height > 400) {
-    alert('[DEBUG] branch: LIVE pdfCanvas ' + pdfCanvas.width + 'x' + pdfCanvas.height);
     const {w, h} = _fSafeCanvasSize(pdfCanvas.width, pdfCanvas.height);
     fc.width = w; fc.height = h;
     fc.getContext('2d').drawImage(pdfCanvas, 0, 0, w, h);
     _fFit(); renderFieldBadges(); updateFieldProgress();
   } else {
-    alert('[DEBUG] branch: IMAGE fallback. imageDataUrl length=' + ((_fieldData.imageDataUrl||'').length) + ' imageWidth=' + _fieldData.imageWidth + ' imageHeight=' + _fieldData.imageHeight);
     const img = new Image();
     let settled = false;
     const fail = (reason) => {
       if (settled) return;
       settled = true;
-      alert('[DEBUG] image load failed: ' + reason);
       console.warn('[QAQC] field drawing image failed to load:', reason);
       _fDrawLoadError();
     };
     img.onload = () => {
       if (settled) return;
       settled = true;
-      alert('[DEBUG] onload fired. naturalWidth=' + img.naturalWidth + ' naturalHeight=' + img.naturalHeight);
       const {w, h} = _fSafeCanvasSize(img.naturalWidth, img.naturalHeight);
       fc.width = w; fc.height = h;
       fc.getContext('2d').drawImage(img, 0, 0, w, h);
-      alert('[DEBUG] canvas set to ' + fc.width + 'x' + fc.height + '. viewer clientSize=' + _fViewer().clientWidth + 'x' + _fViewer().clientHeight);
       _fFit(); renderFieldBadges(); updateFieldProgress();
-      alert('[DEBUG] after _fFit: scale=' + _fScale + ' panX=' + _fPanX + ' panY=' + _fPanY);
     };
     img.onerror = () => fail('onerror');
     // Some mobile browsers neither fire onload nor onerror when they give up

@@ -737,17 +737,6 @@
 
 <input type="file" id="fieldPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="addFieldPhoto(this)" />
 
-<script>
-  // TEMPORARY diagnostic — surfaces uncaught errors as an alert so a real
-  // JS error can be seen on a phone with no dev tools attached. Remove once
-  // the mobile-blank-inspection bug is found.
-  window.addEventListener('error', function(e){
-    alert('[DEBUG] JS error: ' + e.message + '\n' + (e.filename||'') + ':' + (e.lineno||'') + '\n' + (e.error && e.error.stack ? e.error.stack.slice(0,300) : ''));
-  });
-  window.addEventListener('unhandledrejection', function(e){
-    alert('[DEBUG] Unhandled promise rejection: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
-  });
-</script>
 <script src="/src/app.js"></script>
 <script src="/src/vector-scan.js"></script>
 <script src="/src/detail-folder.js"></script>

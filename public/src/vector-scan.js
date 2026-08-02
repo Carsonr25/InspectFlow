@@ -5205,12 +5205,12 @@ function doExportToFieldApp(){
   // ── Template reference image ──
   const templateDataUrl = templateCanvas ? templateCanvas.toDataURL('image/png') : null;
 
-  // Resize drawing — cap longest side so inspections stay sharp when zoomed in,
-  // but not so large mobile browsers fail to decode the saved base64 image
-  // (iOS Safari especially can silently fail on very large images — no error,
-  // just a permanently blank canvas). 2600px keeps total pixel area comfortably
-  // under mobile decode limits even for a near-square sheet.
-  const MAX = 2600;
+  // Resize drawing — cap longest side at 4096px, matching the field viewer's
+  // own per-dimension safe-canvas cap (_F_MAX_CANVAS_DIM in field-viewer.js —
+  // the real mobile GPU limit turned out to be per-dimension, not total area).
+  // No point exporting sharper than that: the viewer would just downscale it
+  // again on mobile anyway, so this is the sharpest safe resolution.
+  const MAX = 4096;
   const longestSide = Math.max(pdfCanvas.width, pdfCanvas.height);
   const ratio = Math.min(1, MAX / longestSide);
   const W = Math.round(pdfCanvas.width * ratio);
