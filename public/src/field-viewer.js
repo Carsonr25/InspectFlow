@@ -112,14 +112,43 @@ function renderFieldDrawing() {
     _fFit(); renderFieldBadges(); updateFieldProgress();
   } else {
     const img = new Image();
+    let settled = false;
+    const fail = (reason) => {
+      if (settled) return;
+      settled = true;
+      console.warn('[QAQC] field drawing image failed to load:', reason);
+      _fDrawLoadError();
+    };
     img.onload = () => {
+      if (settled) return;
+      settled = true;
       const {w, h} = _fSafeCanvasSize(img.naturalWidth, img.naturalHeight);
       fc.width = w; fc.height = h;
       fc.getContext('2d').drawImage(img, 0, 0, w, h);
       _fFit(); renderFieldBadges(); updateFieldProgress();
     };
+    img.onerror = () => fail('onerror');
+    // Some mobile browsers neither fire onload nor onerror when they give up
+    // decoding a very large image (memory pressure) — without this backstop
+    // the screen just stays blank forever with no indication anything's wrong.
+    setTimeout(() => fail('timeout'), 12000);
     img.src = _fieldData.imageDataUrl;
   }
+}
+
+function _fDrawLoadError() {
+  const fc = _fCanvas();
+  fc.width = 800; fc.height = 500;
+  const ctx = fc.getContext('2d');
+  ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, fc.width, fc.height);
+  ctx.fillStyle = '#f5f5f5'; ctx.font = '600 22px -apple-system,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('Couldn’t load this drawing on this device', fc.width/2, fc.height/2 - 16);
+  ctx.font = '15px -apple-system,sans-serif';
+  ctx.fillStyle = '#aaa';
+  ctx.fillText('The plan image may be too large for this browser to decode.', fc.width/2, fc.height/2 + 16);
+  _fFit();
+  fieldToast('Could not load the plan image on this device');
 }
 
 function renderFieldBadges() {

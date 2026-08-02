@@ -5194,8 +5194,12 @@ function doExportToFieldApp(){
   // ── Template reference image ──
   const templateDataUrl = templateCanvas ? templateCanvas.toDataURL('image/png') : null;
 
-  // Resize drawing — cap longest side at 5000px so inspections stay sharp when zoomed in
-  const MAX = 5000;
+  // Resize drawing — cap longest side so inspections stay sharp when zoomed in,
+  // but not so large mobile browsers fail to decode the saved base64 image
+  // (iOS Safari especially can silently fail on very large images — no error,
+  // just a permanently blank canvas). 2600px keeps total pixel area comfortably
+  // under mobile decode limits even for a near-square sheet.
+  const MAX = 2600;
   const longestSide = Math.max(pdfCanvas.width, pdfCanvas.height);
   const ratio = Math.min(1, MAX / longestSide);
   const W = Math.round(pdfCanvas.width * ratio);
