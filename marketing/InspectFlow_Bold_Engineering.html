@@ -112,6 +112,24 @@
             color: white;
         }
 
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .login-link {
+            color: var(--text-light);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .login-link:hover {
+            color: var(--accent);
+        }
+
         /* Hero Section */
         .hero {
             padding: 8rem 0;
@@ -476,7 +494,11 @@
                     <li><a href="#solution">Solution</a></li>
                     <li><a href="#features">Features</a></li>
                 </ul>
-                <button class="btn btn-primary">Get Demo</button>
+                <div class="nav-actions">
+                    <!-- TODO: swap to https://inspectflow.us once custom domain DNS finishes propagating -->
+                    <a href="https://inspect-flow-woad.vercel.app/" class="login-link">Log In</a>
+                    <button class="btn btn-primary">Get Demo</button>
+                </div>
             </nav>
         </div>
     </header>
