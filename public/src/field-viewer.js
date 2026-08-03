@@ -99,6 +99,12 @@ function _fAttachEvents() {
   v.addEventListener('pointerup',     _fEndPtr);
   v.addEventListener('pointercancel', _fEndPtr);
   v.addEventListener('wheel', e => {
+    // Wheel events over the bottom sheet bubble up to this listener too
+    // (it's a child of the viewer) -- without this check, scrolling the
+    // sheet's content with a mouse wheel was hijacked into zooming the
+    // background drawing instead, and preventDefault() blocked the sheet's
+    // own scroll entirely.
+    if (e.target.closest('#fieldSheet')) return;
     e.preventDefault();
     const r = v.getBoundingClientRect();
     _fZoom(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.15 : 1/1.15);
