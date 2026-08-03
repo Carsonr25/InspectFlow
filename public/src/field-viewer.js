@@ -334,12 +334,16 @@ function addFieldPhoto(input) {
   reader.readAsDataURL(file); input.value='';
 }
 
-function fieldExportData() {
+async function fieldExportData() {
   if (!_fieldData) return;
-  const payload = {imageDataUrl:_fieldData.imageDataUrl,drawingName:_fieldData.drawingName||'Inspection',exportedAt:_fieldData.exportedAt,inspectedAt:Date.now(),findings:_fieldData.findings};
-  const blob = new Blob([JSON.stringify(payload)],{type:'application/json'});
-  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='field_report.json'; a.click();
-  fieldToast('Exported ✓');
+  // Builds a real, viewable PDF report (cover page, per-finding crops,
+  // pass/fail status, notes, photos) via generateFieldReport() in
+  // vector-scan.js -- previously this just downloaded the raw JSON, and
+  // producing an actual PDF required re-importing that JSON through a
+  // separate file-picker flow. _fieldData already has the exact shape
+  // generateFieldReport() expects (findings/imageDataUrl/imageWidth/
+  // imageHeight), so it can be called directly with no conversion.
+  await generateFieldReport(_fieldData);
 }
 
 function fieldToast(msg) {

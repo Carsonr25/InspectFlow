@@ -5313,7 +5313,12 @@ async function generateFieldReport(payload) {
 
   // Prefer the original full-res pdfCanvas if a drawing is already loaded in the app —
   // it's much sharper than the 2000px compressed JPEG embedded in the field JSON.
-  const useNativeCanvas = pdfCanvas && pdfCanvas.width > 100;
+  // An untouched <canvas> defaults to 300x150 -- >100 was passing that check
+  // and treating a blank canvas as "the real drawing" whenever this runs
+  // without a live PDF loaded (e.g. opened straight from Inspections),
+  // producing a blank/broken overview page instead of falling back to the
+  // saved payload image. Same fix as field-viewer.js's renderFieldDrawing().
+  const useNativeCanvas = pdfCanvas && pdfCanvas.width > 400 && pdfCanvas.height > 400;
   const NW = useNativeCanvas ? pdfCanvas.width  : payload.imageWidth  || 2000;
   const NH = useNativeCanvas ? pdfCanvas.height : payload.imageHeight || 1000;
 
