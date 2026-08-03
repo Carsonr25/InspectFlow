@@ -5427,47 +5427,78 @@ async function generateFieldReport(payload) {
     doc.text(String(i+1), dx, dy+1.2, {align:'center'});
   });
 
-  // ── Page 2: Type breakdown + inspection questions (same format as QAQC checklist) ──
+  // ── Page 2: Type/item pass-fail summary, always shown ──
+  // Then, ONLY if real AI-generated questions actually exist somewhere,
+  // a separate checklist page for those specific types. A type with no
+  // questions no longer gets an empty "No inspection questions defined"
+  // placeholder row at all -- it just doesn't appear in that section.
   const typeInfo = payload.typeInfo || {};
   const typeKeys = Object.keys(typeInfo);
+
   if (typeKeys.length > 0 && typeof doc.autoTable === 'function') {
     doc.addPage();
-
-    // Page header
     doc.setFillColor(15,39,68);
     doc.rect(M, M, PW-M*2, 14, 'F');
     doc.setTextColor(255,255,255);
     doc.setFont('helvetica','bold'); doc.setFontSize(12);
-    doc.text('INSPECTION CHECKLIST & FIELD RESULTS', M+4, M+9);
+    doc.text('ITEM SUMMARY', M+4, M+9);
     doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
     doc.text(`Project: ${projectName||'—'}  ·  Inspector: ${inspector||'—'}  ·  Date: ${today}`, M+4, M+13);
 
-    const tableRows = [];
-    let qn = 1;
-
-    typeKeys.forEach(typeKey => {
+    const summaryRows = typeKeys.map(typeKey => {
       const tInfo = typeInfo[typeKey];
       const typeFindings = payload.findings.filter(f => f.typeKey === typeKey);
-      const typePassed  = typeFindings.filter(f => f.status === 'pass').length;
-      const typeFailed  = typeFindings.filter(f => f.status === 'fail').length;
-      const typeTotal   = typeFindings.length;
-      const [r,g,b] = hexToRgb(tInfo.color || '#0d9488') || [13,148,136];
-
-      // Type header row
+      const typePassed = typeFindings.filter(f => f.status === 'pass').length;
+      const typeFailed = typeFindings.filter(f => f.status === 'fail').length;
+      const typeTotal  = typeFindings.length;
       const passRate = typeTotal ? Math.round(typePassed/typeTotal*100) : 0;
-      tableRows.push([{
-        content: `${tInfo.name}  —  ${typeTotal} instance${typeTotal!==1?'s':''}  ·  ✓ ${typePassed} passed  ·  ✗ ${typeFailed} failed  ·  ${passRate}% pass rate`,
-        colSpan: 6,
-        styles: { fillColor:[r,g,b], textColor:[255,255,255], fontStyle:'bold', fontSize:8.5 }
-      }]);
+      return [tInfo.name, String(typeTotal), String(typePassed), String(typeFailed), String(typeTotal-typePassed-typeFailed), passRate+'%'];
+    });
 
-      const questions = tInfo.questions || [];
-      if (questions.length === 0) {
-        tableRows.push([{ content:'No inspection questions defined for this type.', colSpan:6,
-          styles:{ textColor:[150,150,150], fontSize:7, fontStyle:'italic', cellPadding:3 } }]);
-      } else {
-        questions.forEach((q, qi) => {
-          // Tally yes/no/unchecked across all findings of this type
+    doc.autoTable({
+      startY: M+18,
+      head:[['Item / Type','Count','Passed','Failed','Not Reviewed','Pass Rate']],
+      body: summaryRows,
+      styles:{ fontSize:8.5, cellPadding:3, valign:'middle' },
+      headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:8.5 },
+      columnStyles:{
+        0:{ cellWidth:'auto', fontStyle:'bold' },
+        1:{ cellWidth:22, halign:'center' },
+        2:{ cellWidth:26, halign:'center', textColor:[22,163,74] },
+        3:{ cellWidth:26, halign:'center', textColor:[220,38,38] },
+        4:{ cellWidth:30, halign:'center', textColor:[100,116,139] },
+        5:{ cellWidth:26, halign:'center', fontStyle:'bold' },
+      },
+      margin:{ top:M, left:M, right:M },
+    });
+
+    // ── Inspection questions checklist — only if some type actually has any ──
+    const typesWithQuestions = typeKeys.filter(k => (typeInfo[k].questions||[]).length > 0);
+    if (typesWithQuestions.length > 0) {
+      doc.addPage();
+      doc.setFillColor(15,39,68);
+      doc.rect(M, M, PW-M*2, 14, 'F');
+      doc.setTextColor(255,255,255);
+      doc.setFont('helvetica','bold'); doc.setFontSize(12);
+      doc.text('INSPECTION CHECKLIST', M+4, M+9);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+      doc.text(`Project: ${projectName||'—'}  ·  Inspector: ${inspector||'—'}  ·  Date: ${today}`, M+4, M+13);
+
+      const tableRows = [];
+      let qn = 1;
+      typesWithQuestions.forEach(typeKey => {
+        const tInfo = typeInfo[typeKey];
+        const typeFindings = payload.findings.filter(f => f.typeKey === typeKey);
+        const typeTotal = typeFindings.length;
+        const [r,g,b] = hexToRgb(tInfo.color || '#0d9488') || [13,148,136];
+
+        tableRows.push([{
+          content: tInfo.name,
+          colSpan: 6,
+          styles: { fillColor:[r,g,b], textColor:[255,255,255], fontStyle:'bold', fontSize:8.5 }
+        }]);
+
+        tInfo.questions.forEach((q, qi) => {
           let yes=0, no=0;
           typeFindings.forEach(f => {
             const chk = (f.questionChecks||[])[qi];
@@ -5478,39 +5509,33 @@ async function generateFieldReport(payload) {
             : '';
           tableRows.push([qn++, q, tally, '', '', '']);
         });
-      }
-    });
+      });
 
-    // Extra notes rows
-    tableRows.push([{ content:'Additional Field Notes', colSpan:6,
-      styles:{ fillColor:[235,235,235], fontStyle:'bold', fontSize:7, textColor:[80,80,80] } }]);
-    for(let i=0;i<3;i++) tableRows.push([qn++,'','','','','']);
-
-    doc.autoTable({
-      startY: M+16,
-      head:[['#','Inspection Item','Field Tally','Pass','Fail','PE Notes']],
-      body: tableRows,
-      styles:{ fontSize:8, cellPadding:2.5, valign:'middle', overflow:'linebreak', minCellHeight:7 },
-      headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:8 },
-      columnStyles:{
-        0:{ cellWidth:8,  halign:'center', fontStyle:'bold' },
-        1:{ cellWidth:'auto' },
-        2:{ cellWidth:28, halign:'center', textColor:[60,80,100] },
-        3:{ cellWidth:14, halign:'center' },
-        4:{ cellWidth:14, halign:'center' },
-        5:{ cellWidth:30 },
-      },
-      margin:{ top:M, left:M, right:M },
-      didDrawCell(data) {
-        // Draw checkbox squares in Pass/Fail columns for question rows
-        if((data.column.index===3||data.column.index===4) && data.row.section==='body' && typeof data.row.raw[0]==='number'){
-          const {x,y,width,height} = data.cell;
-          const sz=4, bx=x+width/2-sz/2, by=y+height/2-sz/2;
-          doc.setDrawColor(180,180,180); doc.setLineWidth(0.3);
-          doc.rect(bx,by,sz,sz,'S');
+      doc.autoTable({
+        startY: M+16,
+        head:[['#','Inspection Item','Field Tally','Pass','Fail','PE Notes']],
+        body: tableRows,
+        styles:{ fontSize:8, cellPadding:2.5, valign:'middle', overflow:'linebreak', minCellHeight:7 },
+        headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:8 },
+        columnStyles:{
+          0:{ cellWidth:8,  halign:'center', fontStyle:'bold' },
+          1:{ cellWidth:'auto' },
+          2:{ cellWidth:28, halign:'center', textColor:[60,80,100] },
+          3:{ cellWidth:14, halign:'center' },
+          4:{ cellWidth:14, halign:'center' },
+          5:{ cellWidth:30 },
+        },
+        margin:{ top:M, left:M, right:M },
+        didDrawCell(data) {
+          if((data.column.index===3||data.column.index===4) && data.row.section==='body' && typeof data.row.raw[0]==='number'){
+            const {x,y,width,height} = data.cell;
+            const sz=4, bx=x+width/2-sz/2, by=y+height/2-sz/2;
+            doc.setDrawColor(180,180,180); doc.setLineWidth(0.3);
+            doc.rect(bx,by,sz,sz,'S');
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   // ── Finding cards — 3 cols × 2 rows = 6 per page ──
@@ -5537,7 +5562,11 @@ async function generateFieldReport(payload) {
     doc.roundedRect(cx2,cy2,cardW,9,2,2,'F');
     doc.rect(cx2,cy2+5,cardW,4,'F');
     doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8);
-    const statusTxt = f.status==='pass'?'✓  PASS':f.status==='fail'?'✗  FAIL':'○  NOT REVIEWED';
+    // Plain text only, no ✓/✗/○ glyphs — jsPDF's standard Helvetica font uses
+    // WinAnsi encoding, which doesn't include those symbols. They rendered as
+    // garbled mojibake ("%Ë  NOT REVIEWED") instead of an actual checkmark —
+    // the colored bar itself already conveys pass/fail/not-reviewed.
+    const statusTxt = f.status==='pass'?'PASS':f.status==='fail'?'FAIL':'NOT REVIEWED';
     doc.text(`#${i+1}  ${statusTxt}`, cx2+3, cy2+6);
 
     // Label + score row
