@@ -67,6 +67,13 @@
             display: block;
         }
 
+        .logo-symbol {
+            height: 26px;
+            width: auto;
+            display: block;
+            margin-right: 16px;
+        }
+
         .logo-accent {
             color: var(--accent);
         }
@@ -182,10 +189,10 @@
             margin-bottom: 1.5rem;
             line-height: 1.1;
             letter-spacing: -1px;
-            background: linear-gradient(135deg, #f5f5f5 0%, #f5f5f5 70%, #ff6b35 70%, #ff6b35 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: var(--text-light);
+        }
+        .hero h1 .accent {
+            color: var(--accent);
         }
 
         .hero p {
@@ -508,15 +515,16 @@
     <header>
         <div class="container">
             <nav>
-                <a href="#" class="logo"><img src="inspectflow-logo.png" alt="InspectFlow" class="logo-img"></a>
+                <a href="#" class="logo">
+                    <img src="inspectflow-symbol-nav.png" alt="" class="logo-symbol">
+                    <img src="inspectflow-logo.png" alt="InspectFlow" class="logo-img">
+                </a>
                 <ul class="nav-links">
                     <li><a href="#solution">Solution</a></li>
                     <li><a href="#features">Features</a></li>
                 </ul>
                 <div class="nav-actions">
-                    <!-- TODO: swap to https://inspectflow.us once custom domain DNS finishes propagating -->
-                    <a href="https://inspect-flow-woad.vercel.app/" class="login-link">Log In</a>
-                    <button class="btn btn-primary">Get Demo</button>
+                    <a href="https://inspectflow-tool.vercel.app/" class="login-link">Log In</a>
                 </div>
             </nav>
         </div>
@@ -526,7 +534,7 @@
     <section class="hero">
         <div class="container">
             <div class="hero-content">
-                <h1>Your Complete Inspection Platform</h1>
+                <h1>Less Redundant Work. <span class="accent">More Real Inspection.</span></h1>
                 <p>Make sure your project engineers are spending time doing actual QAQC, not organizing photos, doing redundant markups, and busy work. InspectFlow handles the overhead so your team can focus on what matters.</p>
             </div>
         </div>
@@ -570,23 +578,23 @@
         <div class="container">
             <div class="value-grid">
                 <div class="value-content">
-                    <h2>Engineers Inspect. We Handle the Rest.</h2>
+                    <h2>Every Inspection, One Source of Truth.</h2>
                     <div class="value-list">
                         <div class="value-item">
-                            <h3>Mark Plans in Seconds</h3>
-                            <p>Huge, complicated plans. Marked up completely in seconds. Not minutes or hours. Speed at scale.</p>
+                            <h3>Punch Lists, Built In</h3>
+                            <p>Build a punch list and apply it across floors and rooms in seconds. One dashboard shows what's open, what's resolved, and what's waiting on sign-off.</p>
                         </div>
                         <div class="value-item">
-                            <h3>Quicker Markups & Inspections</h3>
-                            <p>Create location-based markups with photos, notes, and status in seconds. No redundant work. No plan re-reading.</p>
+                            <h3>Documentation, Not Debate</h3>
+                            <p>Every finding is backed by its own photo, note, and status — not a hallway conversation. If it was inspected, there's documentation that proves it.</p>
                         </div>
                         <div class="value-item">
-                            <h3>Organized, Not Chaotic</h3>
-                            <p>Photos and notes auto-organize by location and type. No cluttered camera roll. No confusion about what goes where.</p>
+                            <h3>Status, Tracked in Real Time</h3>
+                            <p>See what's been inspected and what hasn't the moment it happens. No end-of-week scramble to piece together where things stand.</p>
                         </div>
                         <div class="value-item">
-                            <h3>Smart Plan Analysis</h3>
-                            <p>Automatically reads construction plans, splits findings by type, and generates your QA/QC checklist. No manual interpretation.</p>
+                            <h3>One Record, Whole Team</h3>
+                            <p>Anyone on the project can open an inspection, read the comments, and sign off. Office and field, always looking at the same record.</p>
                         </div>
                     </div>
                 </div>
@@ -615,8 +623,8 @@
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">⊡</div>
-                    <h3>On-Site Inspections</h3>
-                    <p>Work offline on jobsites. Capture photos and notes that automatically sync to their marked locations when online.</p>
+                    <h3>Real-Time Inspections</h3>
+                    <p>Walk the job with all the information right in front of you. No more trying to interpret the plans during your inspection.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">⊙</div>
