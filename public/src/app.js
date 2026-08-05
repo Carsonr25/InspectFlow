@@ -23,6 +23,7 @@ function showAuth() {
   document.getElementById('authScreen').style.display = 'flex';
   document.getElementById('dashScreen').style.display = 'none';
   document.getElementById('appWrap').style.display   = 'none';
+  document.getElementById('siteplanWrap').style.display = 'none';
 }
 // Detect mobile
 function _isMobile() {
@@ -34,6 +35,7 @@ function showDash() {
   document.getElementById('dashScreen').style.display = 'flex';
   document.getElementById('appWrap').style.display    = 'none';
   document.getElementById('fieldWrap').style.display  = 'none';
+  document.getElementById('siteplanWrap').style.display = 'none';
   const emailEl = document.getElementById('dashUserEmail');
   if (emailEl) emailEl.textContent = _sbUser?.email ?? '';
   // Default tab: Inspections on mobile, Plans on desktop
@@ -43,21 +45,26 @@ function showDash() {
 function switchDashTab(tab) {
   const isPlans = tab === 'plans';
   const isInsp  = tab === 'inspections';
+  const isSP    = tab === 'siteplans';
   const isOrg   = tab === 'org';
   document.getElementById('tabPlans').classList.toggle('active', isPlans);
   document.getElementById('tabInspections').classList.toggle('active', isInsp);
+  document.getElementById('tabSitePlans').classList.toggle('active', isSP);
   document.getElementById('tabOrg').classList.toggle('active', isOrg);
   document.getElementById('paneP').classList.toggle('active', isPlans);
   document.getElementById('paneI').classList.toggle('active', isInsp);
+  document.getElementById('paneSP').classList.toggle('active', isSP);
   document.getElementById('paneOrg').classList.toggle('active', isOrg);
   if (isPlans) loadPlans();
   else if (isInsp) loadInspections();
+  else if (isSP) loadSitePlans();
   else if (isOrg) loadOrgPane();
 }
 function showTool() {
   document.getElementById('authScreen').style.display = 'none';
   document.getElementById('dashScreen').style.display = 'none';
   document.getElementById('fieldWrap').style.display  = 'none';
+  document.getElementById('siteplanWrap').style.display = 'none';
   const aw = document.getElementById('appWrap');
   aw.style.display = 'flex';
   const bb = document.getElementById('backToPlansBtn');
@@ -68,7 +75,16 @@ function showField() {
   document.getElementById('authScreen').style.display = 'none';
   document.getElementById('dashScreen').style.display = 'none';
   document.getElementById('appWrap').style.display    = 'none';
+  document.getElementById('siteplanWrap').style.display = 'none';
   document.getElementById('fieldWrap').style.display  = 'flex';
+}
+
+function showSitePlanEditor() {
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('dashScreen').style.display = 'none';
+  document.getElementById('appWrap').style.display    = 'none';
+  document.getElementById('fieldWrap').style.display  = 'none';
+  document.getElementById('siteplanWrap').style.display = 'flex';
 }
 
 // ── ITEM MANAGEMENT ───────────────────────────────────────────────────
@@ -1352,8 +1368,434 @@ async function doAssign(toUserId, toEmail) {
   } catch(e) { alert('Could not assign: '+e.message); }
 }
 
-function triggerDashUpload() {
-  document.getElementById('dashFileInput').click();
+// ── Site Plans (upload a site plan → draw rooms → assign existing
+// inspections to each room). Each site plan is stored as a single JSON
+// blob (name + image data URL + rooms[]) in the 'site-plans' storage
+// bucket — same pattern as exported inspections, just self-contained
+// so no extra DB table/migration is needed. ─────────────────────────
+let currentSitePlan  = null; // {path, data:{id,name,image,rooms,createdAt}}
+let _spSelectedRoomId = null;
+let _spDrawMode       = false;
+let _spPendingRoomRect = null; // {xPct,yPct,wPct,hPct} awaiting a name
+let _spAssignRoomId   = null;
+
+const SITE_PLANS_BUCKET_HINT = `<div class="plans-empty"><div class="empty-icon">🏗️</div><p>Storage bucket "site-plans" isn't set up yet.<br>Create a private bucket named <b>site-plans</b> in Supabase (Storage → New bucket), then reload.</p></div>`;
+
+async function loadSitePlans() {
+  const el = document.getElementById('sitePlansGrid');
+  if (!_sb || !_sbUser) { el.innerHTML = '<div class="dash-loader">Log in to see site plans.</div>'; return; }
+  el.innerHTML = '<div class="dash-loader">Loading…</div>';
+  try {
+    // Note: getBucket()/listBuckets() require more than the anon key has —
+    // they 404 even for buckets that exist and work fine via list/upload/
+    // download, so bucket-missing can only be inferred from a real
+    // operation's error (list() itself returns [] with no error either way).
+    const { data, error } = await _sb.storage.from('site-plans')
+      .list(_sbUser.id + '/', { sortBy: { column: 'created_at', order: 'desc' } });
+    if (error) throw error;
+    const files = (data || []).filter(f => f.name && f.name.endsWith('.json'));
+    if (files.length === 0) {
+      el.innerHTML = `<div class="plans-empty"><div class="empty-icon">🏗️</div><p>No site plans yet.<br>Upload one to start marking out rooms.</p></div>`;
+      return;
+    }
+    el.innerHTML = '';
+    files.forEach(f => {
+      const displayName = f.name.replace(/^\d+_/, '').replace(/\.json$/, '').replace(/_/g, ' ');
+      const date = f.created_at ? new Date(f.created_at).toLocaleDateString() : '';
+      const path = _sbUser.id + '/' + f.name;
+      const div = document.createElement('div');
+      div.className = 'sp-card';
+      div.onclick = () => openSitePlan(path);
+      div.innerHTML = `<div class="plan-icon">🏗️</div>
+        <div class="sp-name" title="${_esc(displayName)}">${_esc(displayName)}</div>
+        <div class="sp-meta">${date}</div>
+        <button class="sp-del" onclick="event.stopPropagation();deleteSitePlan('${path}')">✕ Delete</button>`;
+      el.appendChild(div);
+    });
+  } catch(e) {
+    const missing = e.message && (e.message.includes('not found') || e.message.includes('does not exist') || e.message.includes('Bucket not found'));
+    el.innerHTML = missing ? SITE_PLANS_BUCKET_HINT : `<div class="dash-loader">Could not load site plans: ${e.message}</div>`;
+  }
+}
+
+function triggerSitePlanUpload() {
+  document.getElementById('sitePlanFileInput').click();
+}
+
+async function handleSitePlanUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  if (!_sb || !_sbUser) { alert('Log in to upload a site plan.'); return; }
+  try {
+    const image = await _sitePlanFileToImage(file);
+    const name = file.name.replace(/\.[^.]+$/, '');
+    const id = Date.now();
+    const slug = name.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '_') || 'site_plan';
+    const path = `${_sbUser.id}/${id}_${slug}.json`;
+    const data = { id, name, image, rooms: [], createdAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const { error } = await _sb.storage.from('site-plans').upload(path, blob, { upsert: true });
+    if (error) throw error;
+    currentSitePlan = { path, data };
+    _spSelectedRoomId = null;
+    _spDrawMode = false;
+    showSitePlanEditor();
+    renderSitePlanEditor();
+  } catch(e) { alert('Could not upload site plan: ' + e.message); }
+}
+
+// Renders an uploaded file to a size-capped JPEG data URL: PDFs render
+// page 1 (reusing the pdf.js instance already loaded for plan sheets),
+// images are downscaled if oversized. Keeps the resulting JSON blob small.
+async function _sitePlanFileToImage(file) {
+  const MAX_DIM = 2200;
+  if (file.type === 'application/pdf') {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const page = await pdf.getPage(1);
+    const baseVp = page.getViewport({ scale: 1 });
+    const scale = Math.min(MAX_DIM / baseVp.width, MAX_DIM / baseVp.height, 3);
+    const vp = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width; canvas.height = vp.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+    return canvas.toDataURL('image/jpeg', 0.9);
+  }
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  const img = await new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = dataUrl;
+  });
+  if (img.width <= MAX_DIM && img.height <= MAX_DIM) return dataUrl;
+  const scale = MAX_DIM / Math.max(img.width, img.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width * scale; canvas.height = img.height * scale;
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.9);
+}
+
+async function openSitePlan(path) {
+  try {
+    const { data, error } = await _sb.storage.from('site-plans').download(path);
+    if (error) throw error;
+    const text = await data.text();
+    const parsed = JSON.parse(text);
+    parsed.rooms = parsed.rooms || [];
+    currentSitePlan = { path, data: parsed };
+    _spSelectedRoomId = null;
+    _spDrawMode = false;
+    showSitePlanEditor();
+    renderSitePlanEditor();
+  } catch(e) { alert('Could not open site plan: ' + e.message); }
+}
+
+async function deleteSitePlan(path) {
+  if (!confirm('Delete this site plan? This cannot be undone.')) return;
+  const { error } = await _sb.storage.from('site-plans').remove([path]);
+  if (error) { alert('Delete failed: ' + error.message); return; }
+  loadSitePlans();
+}
+
+function closeSitePlanEditor() {
+  currentSitePlan = null;
+  _spSelectedRoomId = null;
+  _spDrawMode = false;
+  showDash();
+  switchDashTab('siteplans');
+}
+
+async function _persistCurrentSitePlan() {
+  if (!currentSitePlan || !_sb) return;
+  const blob = new Blob([JSON.stringify(currentSitePlan.data)], { type: 'application/json' });
+  try {
+    const { error } = await _sb.storage.from('site-plans').upload(currentSitePlan.path, blob, { upsert: true });
+    if (error) throw error;
+  } catch(e) { console.warn('[QAQC] site plan save failed', e); }
+}
+
+// Explicit Move/Draw toggle (two buttons, not one) — draw mode used to stay
+// on indefinitely after placing a room, silently turning every subsequent
+// drag into a new room instead of a pan, with no obvious way back to panning.
+function setSpMode(draw) {
+  _spDrawMode = draw;
+  const moveBtn = document.getElementById('spMoveBtn');
+  const drawBtn = document.getElementById('spDrawBtn');
+  const vp = document.getElementById('spCanvasArea');
+  if (moveBtn) moveBtn.classList.toggle('active', !draw);
+  if (drawBtn) drawBtn.classList.toggle('active', draw);
+  if (vp) vp.style.cursor = draw ? 'crosshair' : 'grab';
+}
+
+function renderSitePlanEditor() {
+  if (!currentSitePlan) return;
+  document.getElementById('spTitle').textContent = currentSitePlan.data.name;
+  setSpMode(false);
+  const img = document.getElementById('spImage');
+  const box = document.getElementById('spImageBox');
+  img.onload = () => {
+    // Give the box its real pixel size (once) so room-box percentages and
+    // the zoom/pan CSS transform below have a stable, unscaled coordinate
+    // system to work in — the transform then handles all visual scaling.
+    box.style.width = img.naturalWidth + 'px';
+    box.style.height = img.naturalHeight + 'px';
+    spZoomFit();
+  };
+  img.src = currentSitePlan.data.image;
+  renderSpRoomsOverlay();
+  renderSpRoomsList();
+}
+
+// ── Zoom / pan for the site plan canvas — same translate+scale transform
+// approach as the main plan-sheet viewer, just scoped to its own state. ──
+let spScale = 1, spPanX = 0, spPanY = 0;
+let _spIsPanning = false, _spPanStart = null;
+
+function spApplyTransform() {
+  const zc = document.getElementById('spZoomContent');
+  if (zc) zc.style.transform = `translate3d(${spPanX}px,${spPanY}px,0) scale(${spScale})`;
+  const lbl = document.getElementById('spZoomLabel');
+  if (lbl) lbl.textContent = Math.round(spScale * 100) + '%';
+}
+
+function spGetViewportRect() { return document.getElementById('spCanvasArea').getBoundingClientRect(); }
+
+function spZoomFit() {
+  const img = document.getElementById('spImage');
+  const vp = spGetViewportRect();
+  const iw = img.naturalWidth || 1, ih = img.naturalHeight || 1;
+  spScale = Math.min(vp.width / iw, vp.height / ih) * 0.95;
+  spPanX = (vp.width - iw * spScale) / 2;
+  spPanY = (vp.height - ih * spScale) / 2;
+  spApplyTransform();
+}
+
+function spZoomAround(vpX, vpY, factor) {
+  const ns = Math.min(10, Math.max(0.1, spScale * factor));
+  const r = ns / spScale;
+  spPanX = vpX - r * (vpX - spPanX);
+  spPanY = vpY - r * (vpY - spPanY);
+  spScale = ns;
+  spApplyTransform();
+}
+
+function spZoomIn() { const vp = spGetViewportRect(); spZoomAround(vp.width / 2, vp.height / 2, 1.4); }
+function spZoomOut() { const vp = spGetViewportRect(); spZoomAround(vp.width / 2, vp.height / 2, 1 / 1.4); }
+
+// Converts a screen point into the image's own unscaled pixel coordinates —
+// same role as the main viewer's vpToCanvas().
+function spVpToContent(clientX, clientY) {
+  const vp = spGetViewportRect();
+  return { x: (clientX - vp.left - spPanX) / spScale, y: (clientY - vp.top - spPanY) / spScale };
+}
+
+function renderSpRoomsOverlay() {
+  const box = document.getElementById('spImageBox');
+  if (!box || !currentSitePlan) return;
+  box.querySelectorAll('.sp-room-box').forEach(el => el.remove());
+  currentSitePlan.data.rooms.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'sp-room-box' + (r.id === _spSelectedRoomId ? ' selected' : '');
+    div.style.left = r.xPct + '%'; div.style.top = r.yPct + '%';
+    div.style.width = r.wPct + '%'; div.style.height = r.hPct + '%';
+    div.innerHTML = `<span class="sp-room-label">${_esc(r.name)}</span>`;
+    div.onclick = (e) => { e.stopPropagation(); selectSpRoom(r.id); };
+    box.appendChild(div);
+  });
+}
+
+function renderSpRoomsList() {
+  const list = document.getElementById('spRoomsList');
+  const hint = document.getElementById('spRoomsEmptyHint');
+  if (!currentSitePlan) return;
+  const rooms = currentSitePlan.data.rooms;
+  if (!rooms.length) { list.innerHTML = ''; hint.style.display = 'block'; return; }
+  hint.style.display = 'none';
+  list.innerHTML = rooms.map(r => {
+    const sel = r.id === _spSelectedRoomId;
+    const assigned = r.assigned || [];
+    return `<div class="sp-room-card${sel ? ' selected' : ''}" onclick="selectSpRoom(${r.id})">
+      <div class="sp-room-card-top">
+        <span class="sp-room-card-name">${_esc(r.name)}</span>
+        <button class="sp-room-del" onclick="event.stopPropagation();deleteSpRoom(${r.id})">✕</button>
+      </div>
+      ${assigned.map(a => `<div class="sp-assign-chip"><span>${_esc(a.name)}</span><button onclick="event.stopPropagation();unassignInspectionFromRoom(${r.id},'${a.path.replace(/'/g,"\\'")}')">✕</button></div>`).join('')}
+      <button class="sp-assign-btn" onclick="event.stopPropagation();openSpAssignModal(${r.id})">+ Assign Inspection</button>
+    </div>`;
+  }).join('');
+}
+
+function selectSpRoom(id) {
+  _spSelectedRoomId = (_spSelectedRoomId === id) ? null : id;
+  renderSpRoomsOverlay();
+  renderSpRoomsList();
+}
+
+function deleteSpRoom(id) {
+  if (!confirm('Delete this room?')) return;
+  currentSitePlan.data.rooms = currentSitePlan.data.rooms.filter(r => r.id !== id);
+  if (_spSelectedRoomId === id) _spSelectedRoomId = null;
+  renderSpRoomsOverlay();
+  renderSpRoomsList();
+  _persistCurrentSitePlan();
+}
+
+// ── Drawing a new room rectangle, plus wheel-zoom and drag-to-pan, on the
+// site plan canvas. Panning is the default drag behavior; draw mode (the
+// "✎ Draw Room" toggle) takes over the drag gesture to place a room instead. ──
+document.addEventListener('DOMContentLoaded', () => {
+  const vp = document.getElementById('spCanvasArea');
+  const box = document.getElementById('spImageBox');
+  if (!vp || !box) return;
+  let band = null, drawStart = null;
+
+  vp.addEventListener('wheel', (e) => {
+    if (!currentSitePlan) return;
+    e.preventDefault();
+    const rect = vp.getBoundingClientRect();
+    spZoomAround(e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+  }, { passive: false });
+
+  vp.addEventListener('pointerdown', (e) => {
+    if (!currentSitePlan) return;
+    if (_spDrawMode) {
+      drawStart = spVpToContent(e.clientX, e.clientY);
+      band = document.createElement('div');
+      band.className = 'sp-draw-band';
+      box.appendChild(band);
+      e.preventDefault();
+    } else {
+      _spIsPanning = true;
+      _spPanStart = { x: e.clientX - spPanX, y: e.clientY - spPanY };
+      vp.classList.add('panning');
+    }
+  });
+  vp.addEventListener('pointermove', (e) => {
+    if (drawStart && band) {
+      const p = spVpToContent(e.clientX, e.clientY);
+      const x1 = Math.min(drawStart.x, p.x), y1 = Math.min(drawStart.y, p.y);
+      band.style.left = x1 + 'px'; band.style.top = y1 + 'px';
+      band.style.width = Math.abs(p.x - drawStart.x) + 'px';
+      band.style.height = Math.abs(p.y - drawStart.y) + 'px';
+    } else if (_spIsPanning && _spPanStart) {
+      spPanX = e.clientX - _spPanStart.x;
+      spPanY = e.clientY - _spPanStart.y;
+      spApplyTransform();
+    }
+  });
+  vp.addEventListener('pointerup', (e) => {
+    if (drawStart) {
+      const p = spVpToContent(e.clientX, e.clientY);
+      const x1 = Math.min(drawStart.x, p.x), y1 = Math.min(drawStart.y, p.y);
+      const w = Math.abs(p.x - drawStart.x), h = Math.abs(p.y - drawStart.y);
+      drawStart = null;
+      if (band) { band.remove(); band = null; }
+      const img = document.getElementById('spImage');
+      const iw = img.naturalWidth || 1, ih = img.naturalHeight || 1;
+      // Threshold in screen px (not content px) so it stays meaningful at any zoom level.
+      if (w * spScale < 12 || h * spScale < 12) return;
+      _spPendingRoomRect = {
+        xPct: x1 / iw * 100, yPct: y1 / ih * 100,
+        wPct: w / iw * 100, hPct: h / ih * 100
+      };
+      openRoomNameModal();
+    }
+    if (_spIsPanning) {
+      _spIsPanning = false;
+      vp.classList.remove('panning');
+    }
+  });
+  vp.addEventListener('pointerleave', () => {
+    if (_spIsPanning) { _spIsPanning = false; vp.classList.remove('panning'); }
+  });
+  window.addEventListener('resize', () => { if (currentSitePlan) spApplyTransform(); });
+});
+
+function openRoomNameModal() {
+  const overlay = document.getElementById('roomNameOverlay');
+  const input = document.getElementById('roomNameInput');
+  if (input) input.value = '';
+  if (overlay) overlay.classList.add('open');
+  if (input) setTimeout(() => input.focus(), 0);
+}
+
+function cancelRoomName() {
+  document.getElementById('roomNameOverlay').classList.remove('open');
+  _spPendingRoomRect = null;
+}
+
+function confirmRoomName() {
+  const input = document.getElementById('roomNameInput');
+  const name = input ? input.value.trim() : '';
+  if (!name || !_spPendingRoomRect || !currentSitePlan) return;
+  currentSitePlan.data.rooms.push({ id: Date.now(), name, ..._spPendingRoomRect, assigned: [] });
+  _spPendingRoomRect = null;
+  document.getElementById('roomNameOverlay').classList.remove('open');
+  renderSpRoomsOverlay();
+  renderSpRoomsList();
+  _persistCurrentSitePlan();
+}
+
+// ── Assign an existing inspection (from the Inspections tab) to a room ──
+async function openSpAssignModal(roomId) {
+  _spAssignRoomId = roomId;
+  const room = currentSitePlan.data.rooms.find(r => r.id === roomId);
+  if (!room) return;
+  document.getElementById('spAssignRoomName').textContent = room.name;
+  const listEl = document.getElementById('spAssignInspList');
+  listEl.innerHTML = '<div style="font-size:12px;color:var(--text2);padding:8px 0;">Loading…</div>';
+  document.getElementById('spAssignOverlay').classList.add('open');
+  try {
+    const { data, error } = await _sb.storage.from('inspections')
+      .list(_sbUser.id + '/', { sortBy: { column: 'created_at', order: 'desc' } });
+    if (error) throw error;
+    const files = (data || []).filter(f => f.name && !f.name.startsWith('.'));
+    const assignedPaths = new Set((room.assigned || []).map(a => a.path));
+    const avail = files.filter(f => !assignedPaths.has(_sbUser.id + '/' + f.name));
+    if (!avail.length) {
+      listEl.innerHTML = '<div style="font-size:12px;color:var(--text2);padding:8px 0;">No unassigned inspections available.</div>';
+      return;
+    }
+    listEl.innerHTML = avail.map(f => {
+      const displayName = f.name.replace(/^\d{4}-\d{2}-\d{2}T[^_]+_/, '').replace(/\.json$/, '').replace(/_/g,' ');
+      const path = _sbUser.id + '/' + f.name;
+      return `<div class="assign-member" onclick="assignInspectionToRoom('${path.replace(/'/g,"\\'")}','${displayName.replace(/'/g,"\\'")}')">
+        <div class="assign-member-avatar">📋</div>
+        <span class="assign-member-email">${_esc(displayName)}</span></div>`;
+    }).join('');
+  } catch(e) {
+    listEl.innerHTML = `<div style="font-size:12px;color:var(--text2);padding:8px 0;">Could not load inspections: ${e.message}</div>`;
+  }
+}
+
+function closeSpAssignModal() {
+  document.getElementById('spAssignOverlay').classList.remove('open');
+  _spAssignRoomId = null;
+}
+
+function assignInspectionToRoom(path, name) {
+  const room = currentSitePlan.data.rooms.find(r => r.id === _spAssignRoomId);
+  if (!room) return;
+  room.assigned = room.assigned || [];
+  if (!room.assigned.some(a => a.path === path)) room.assigned.push({ path, name });
+  closeSpAssignModal();
+  renderSpRoomsList();
+  _persistCurrentSitePlan();
+}
+
+function unassignInspectionFromRoom(roomId, path) {
+  const room = currentSitePlan.data.rooms.find(r => r.id === roomId);
+  if (!room) return;
+  room.assigned = (room.assigned || []).filter(a => a.path !== path);
+  renderSpRoomsList();
+  _persistCurrentSitePlan();
 }
 
 async function handleDashUpload(input) {

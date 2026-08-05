@@ -256,6 +256,50 @@
   .insp-badge { font-size:10px; font-weight:700; padding:2px 6px; border-radius:4px; background:#f0fdf4; color:#166534; border:1px solid #86efac; white-space:nowrap; }
   .insp-section-label { font-size:11px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.06em; margin:16px 0 8px; }
 
+  /* ── Site Plans (dashboard grid) ── */
+  .sp-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; cursor:pointer; transition:all 0.15s; }
+  .sp-card:hover { border-color:var(--navy); box-shadow:0 3px 14px rgba(30,58,95,0.1); transform:translateY(-1px); }
+  .sp-thumb { width:100%; height:100px; object-fit:cover; border-radius:7px; background:var(--surface2); margin-bottom:10px; display:block; }
+  .sp-name { font-size:13px; font-weight:500; color:var(--text); margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sp-meta { font-size:11px; color:var(--text3); margin-bottom:10px; }
+  .sp-del { font-size:11px; color:var(--red); background:none; border:none; cursor:pointer; padding:0; opacity:0.65; font-family:inherit; }
+  .sp-del:hover { opacity:1; }
+
+  /* ── Site Plan editor (full screen) ── */
+  #siteplanWrap { position:fixed; inset:0; background:#1a1a2e; display:none; flex-direction:column; z-index:10; }
+  #spTopBar { background:var(--navy); padding:0 16px; height:52px; display:flex; align-items:center; gap:12px; box-shadow:0 2px 12px rgba(0,0,0,0.3); flex-shrink:0; }
+  #spTopBar button { font-size:12px; padding:6px 12px; border:1px solid rgba(255,255,255,0.25); border-radius:6px; background:transparent; color:rgba(255,255,255,0.85); cursor:pointer; font-family:inherit; }
+  #spTopBar button:hover { background:rgba(255,255,255,0.1); color:#fff; }
+  #spMoveBtn.active, #spDrawBtn.active { background:var(--teal); border-color:var(--teal); color:#fff; }
+  #spTitle { flex:1; font-size:13px; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #spBody { flex:1; display:flex; overflow:hidden; }
+  #spCanvasArea { flex:1; position:relative; overflow:hidden; background:#2a2a3e; cursor:grab; touch-action:none; }
+  #spCanvasArea.panning { cursor:grabbing; }
+  #spZoomContent { position:absolute; top:0; left:0; transform-origin:0 0; will-change:transform; }
+  #spImageBox { position:relative; }
+  #spImage { display:block; width:100%; height:100%; border-radius:4px; box-shadow:0 4px 24px rgba(0,0,0,0.4); user-select:none; -webkit-user-drag:none; }
+  .sp-room-box { position:absolute; border:2px solid var(--teal); background:rgba(13,148,136,0.18); border-radius:2px; cursor:pointer; box-sizing:border-box; }
+  .sp-room-box.selected { border-color:#f59e0b; background:rgba(245,158,11,0.22); }
+  .sp-room-label { position:absolute; top:-20px; left:-2px; font-size:11px; font-weight:700; color:#fff; background:var(--teal); border-radius:4px; padding:1px 6px; white-space:nowrap; pointer-events:none; }
+  .sp-room-box.selected .sp-room-label { background:#f59e0b; }
+  .sp-draw-band { position:absolute; border:2px dashed #fff; background:rgba(255,255,255,0.15); pointer-events:none; box-sizing:border-box; }
+  #spSidebar { width:300px; flex-shrink:0; background:var(--surface); border-left:1px solid var(--border); overflow-y:auto; padding:16px; }
+  #spSidebar h2 { font-size:11px; font-weight:700; color:var(--navy); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px; }
+  .sp-hint { font-size:11px; color:var(--text3); line-height:1.55; padding:11px; background:var(--surface2); border-radius:6px; margin-bottom:12px; }
+  .sp-room-card { border:1.5px solid var(--border); border-radius:8px; margin-bottom:8px; padding:10px; background:var(--surface); cursor:pointer; }
+  .sp-room-card.selected { border-color:#f59e0b; background:#fffbeb; }
+  .sp-room-card-top { display:flex; align-items:center; gap:8px; }
+  .sp-room-card-name { flex:1; font-size:12px; font-weight:600; color:var(--text); }
+  .sp-room-del { background:none; border:none; color:var(--text3); cursor:pointer; font-size:13px; padding:0 2px; line-height:1; }
+  .sp-assign-chip { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--text2); padding:3px 6px; background:var(--surface2); border-radius:4px; margin-top:5px; }
+  .sp-assign-chip button { background:none; border:none; color:var(--red); cursor:pointer; font-size:11px; padding:0; line-height:1; margin-left:auto; }
+  .sp-assign-btn { width:100%; margin-top:8px; padding:7px; background:var(--teal); color:#fff; border:none; border-radius:6px; font-weight:600; font-size:11px; cursor:pointer; }
+
+  #spAssignOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9200; display:none; align-items:center; justify-content:center; }
+  #spAssignOverlay.open { display:flex; }
+  #roomNameOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9200; display:none; align-items:center; justify-content:center; }
+  #roomNameOverlay.open { display:flex; }
+
   /* ── Organization pane ── */
   .org-empty { text-align:center; padding:48px 16px; }
   .org-empty-icon { font-size:40px; margin-bottom:12px; }

@@ -36,6 +36,27 @@
   </div>
 </div>
 
+<!-- Room name modal -->
+<div id="roomNameOverlay">
+  <div class="newitem-card">
+    <div class="newitem-title">Name this room</div>
+    <div class="newitem-sub">e.g. <b>Room 101</b>, <b>Master Bath</b></div>
+    <input type="text" id="roomNameInput" class="newitem-input" placeholder="Room name" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmRoomName();}" />
+    <button class="newitem-create" onclick="confirmRoomName()">Create</button>
+    <button class="newitem-cancel" onclick="cancelRoomName()">Cancel</button>
+  </div>
+</div>
+
+<!-- Assign inspection to room modal -->
+<div id="spAssignOverlay">
+  <div class="assign-card">
+    <div class="assign-title">Assign Inspection</div>
+    <div class="assign-sub" id="spAssignRoomName"></div>
+    <div id="spAssignInspList"></div>
+    <button class="assign-cancel" onclick="closeSpAssignModal()">Cancel</button>
+  </div>
+</div>
+
 <!-- Sort-into-types confirm modal -->
 <div id="sortConfirmOverlay">
   <div class="sortconfirm-card">
@@ -114,6 +135,7 @@
     <div class="dash-tabs">
       <button class="dash-tab active" id="tabPlans" onclick="switchDashTab('plans')">📐 Plans</button>
       <button class="dash-tab" id="tabInspections" onclick="switchDashTab('inspections')">📋 Inspections</button>
+      <button class="dash-tab" id="tabSitePlans" onclick="switchDashTab('siteplans')">🏗️ Site Plans</button>
       <button class="dash-tab" id="tabOrg" onclick="switchDashTab('org')">🏢 Organization</button>
     </div>
 
@@ -133,6 +155,15 @@
         <h1>My Inspections</h1>
       </div>
       <div id="inspectionsGrid"><div class="dash-loader">Loading…</div></div>
+    </div>
+
+    <!-- Site Plans pane -->
+    <div class="dash-pane" id="paneSP">
+      <div class="dash-header">
+        <h1>Site Plans</h1>
+        <button class="dash-new-btn" onclick="triggerSitePlanUpload()">+ New Site Plan</button>
+      </div>
+      <div id="sitePlansGrid" class="plans-grid"><div class="dash-loader">Loading…</div></div>
     </div>
 
     <!-- Organization pane -->
@@ -165,6 +196,7 @@
     </div>
   </div>
   <input type="file" id="dashFileInput" accept=".pdf" style="display:none" onchange="handleDashUpload(this)" />
+  <input type="file" id="sitePlanFileInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleSitePlanUpload(this)" />
 </div>
 
 <!-- ── Context Menu ── -->
@@ -668,6 +700,40 @@
     </div>
     <!-- Summary when done -->
     <div id="reviewSummary" style="display:none;margin-top:12px;padding:10px;background:#f0fdf4;border-radius:8px;font-size:12px;color:#166534;text-align:center;"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SITE PLAN EDITOR — upload a site plan, draw rooms, assign inspections
+     ═══════════════════════════════════════════════════════ -->
+<div id="siteplanWrap">
+  <div id="spTopBar">
+    <button onclick="closeSitePlanEditor()">← Back</button>
+    <div id="spTitle">Site Plan</div>
+    <div style="display:flex;gap:6px;">
+      <button id="spMoveBtn" onclick="setSpMode(false)">🖐 Move</button>
+      <button id="spDrawBtn" onclick="setSpMode(true)">✎ Draw Room</button>
+    </div>
+  </div>
+  <div id="spBody">
+    <div id="spCanvasArea">
+      <div id="spZoomContent">
+        <div id="spImageBox">
+          <img id="spImage" src="" alt="site plan" draggable="false" />
+        </div>
+      </div>
+      <div class="zoom-controls visible">
+        <button class="zc-btn" onclick="spZoomIn()">+</button>
+        <button class="zc-btn" onclick="spZoomOut()">−</button>
+        <button class="zc-btn" onclick="spZoomFit()" style="font-size:13px">⊡</button>
+        <div class="zc-label" id="spZoomLabel">100%</div>
+      </div>
+    </div>
+    <div id="spSidebar">
+      <h2>Rooms</h2>
+      <div id="spRoomsEmptyHint" class="sp-hint">Click "✎ Draw Room" then drag a box on the plan to add a room.</div>
+      <div id="spRoomsList"></div>
+    </div>
   </div>
 </div>
 
