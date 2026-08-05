@@ -486,8 +486,31 @@
             .nav-links {
                 display: none;
             }
+            .container {
+                padding: 0 1.25rem;
+            }
+            header {
+                padding: 1.1rem 0;
+            }
+            .hero {
+                padding: 3rem 0;
+            }
+            .hero::before {
+                width: 280px;
+                height: 280px;
+                top: -15%;
+                right: -30%;
+            }
+            .hero-tagline {
+                margin-bottom: 0.75rem;
+            }
             .hero h1 {
                 font-size: 2.5rem;
+                margin-bottom: 1rem;
+            }
+            .hero p {
+                font-size: 1.05rem;
+                margin-bottom: 1.75rem;
             }
             .section-header h2 {
                 font-size: 2rem;
@@ -551,22 +574,22 @@
                 <div class="solution-card">
                     <h3>Quick Markups</h3>
                     <p>Create markups directly on plans. Each one tied to an exact location — no duplicate work.</p>
-                    <video class="solution-video" src="videos/quick-markups.mp4" autoplay loop muted playsinline></video>
+                    <video class="solution-video" src="videos/quick-markups.mp4" autoplay loop muted playsinline preload="auto" webkit-playsinline></video>
                 </div>
                 <div class="solution-card">
                     <h3>Fast Inspections</h3>
                     <p>Capture photos and notes on-site, auto-attached to marked locations. No messy camera roll.</p>
-                    <video class="solution-video" src="videos/fast-inspections.mp4" autoplay loop muted playsinline></video>
+                    <video class="solution-video" src="videos/fast-inspections.mp4" autoplay loop muted playsinline preload="auto" webkit-playsinline></video>
                 </div>
                 <div class="solution-card">
                     <h3>Intelligent Analysis</h3>
                     <p>Automatically reads plan details, splits findings by type, and builds your QA/QC checklist.</p>
-                    <video class="solution-video" src="videos/intelligent-analysis.mp4" autoplay loop muted playsinline></video>
+                    <video class="solution-video" src="videos/intelligent-analysis.mp4" autoplay loop muted playsinline preload="auto" webkit-playsinline></video>
                 </div>
                 <div class="solution-card">
                     <h3>Clean Reports</h3>
                     <p>One-click reports showing what's working, what needs attention, and exactly where it is.</p>
-                    <video class="solution-video" src="videos/clean-reports.mp4" autoplay loop muted playsinline></video>
+                    <video class="solution-video" src="videos/clean-reports.mp4" autoplay loop muted playsinline preload="auto" webkit-playsinline></video>
                 </div>
             </div>
         </div>
