@@ -131,7 +131,11 @@ function _fSafeCanvasSize(w, h) {
 
 function renderFieldDrawing() {
   _fAttachEvents();
-  document.getElementById('fieldTitle').textContent = _fieldData.drawingName || 'Inspection';
+  // Prefer the name derived from the storage path over the JSON's embedded
+  // drawingName — renaming (app.js renameInspection) only moves the file,
+  // it doesn't touch the file body, so the path is the source of truth.
+  document.getElementById('fieldTitle').textContent =
+    (_fieldCurrentPath && _inspDisplayNameFromPath(_fieldCurrentPath)) || _fieldData.drawingName || 'Inspection';
   document.getElementById('fieldPill').style.display = 'block';
   document.getElementById('fieldBottomBar').style.display = 'flex';
   const fc = _fCanvas();

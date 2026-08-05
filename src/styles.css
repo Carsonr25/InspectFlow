@@ -253,6 +253,8 @@
   .insp-del:hover { opacity:1; }
   .insp-assign { font-size:11px; color:var(--teal); background:none; border:1px solid var(--teal); border-radius:5px; cursor:pointer; padding:2px 7px; font-family:inherit; white-space:nowrap; flex-shrink:0; margin-right:4px; }
   .insp-assign:hover { background:var(--teal); color:#fff; }
+  .insp-rename { font-size:12px; color:var(--text3); background:none; border:none; cursor:pointer; padding:4px; opacity:0.6; font-family:inherit; flex-shrink:0; }
+  .insp-rename:hover { opacity:1; color:var(--text2); }
   .insp-badge { font-size:10px; font-weight:700; padding:2px 6px; border-radius:4px; background:#f0fdf4; color:#166534; border:1px solid #86efac; white-space:nowrap; }
   .insp-section-label { font-size:11px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.06em; margin:16px 0 8px; }
 
@@ -264,6 +266,8 @@
   .sp-meta { font-size:11px; color:var(--text3); margin-bottom:10px; }
   .sp-del { font-size:11px; color:var(--red); background:none; border:none; cursor:pointer; padding:0; opacity:0.65; font-family:inherit; }
   .sp-del:hover { opacity:1; }
+  .sp-rename { font-size:11px; color:var(--text2); background:none; border:none; cursor:pointer; padding:0; opacity:0.75; font-family:inherit; }
+  .sp-rename:hover { opacity:1; color:var(--text); }
 
   /* ── Site Plan editor (full screen) ── */
   #siteplanWrap { position:fixed; inset:0; background:#1a1a2e; display:none; flex-direction:column; z-index:10; }
@@ -299,6 +303,8 @@
   #spAssignOverlay.open { display:flex; }
   #roomNameOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9200; display:none; align-items:center; justify-content:center; }
   #roomNameOverlay.open { display:flex; }
+  #renameOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9200; display:none; align-items:center; justify-content:center; }
+  #renameOverlay.open { display:flex; }
 
   /* ── Organization pane ── */
   .org-empty { text-align:center; padding:48px 16px; }

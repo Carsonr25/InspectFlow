@@ -1061,6 +1061,7 @@ async function loadInspections() {
             <div class="insp-date">${date}</div>
           </div>
           ${_currentOrg ? `<button class="insp-assign" onclick="event.stopPropagation();openAssignModal('${storagePath}','${displayName.replace(/'/g,"\\'")}')">Assign →</button>` : ''}
+          <button class="insp-rename" onclick="event.stopPropagation();renameInspection('${storagePath.replace(/'/g,"\\'")}')">✎</button>
           <button class="insp-del" onclick="event.stopPropagation();deleteInspection('${enc}')">✕</button>`;
         el.appendChild(div);
       });
@@ -1130,6 +1131,67 @@ async function deleteInspection(encodedName) {
   if (!confirm('Delete this inspection? This cannot be undone.')) return;
   const { error } = await _sb.storage.from('inspections').remove([_sbUser.id + '/' + name]);
   if (error) { alert('Delete failed: ' + error.message); return; }
+  loadInspections();
+}
+
+// The display name lives entirely in the filename (timestamp prefix + slug),
+// not inside the stored JSON — so renaming is just a storage move(), no
+// need to download/re-upload the (possibly large, photo-heavy) file body.
+function _inspDisplayNameFromPath(path) {
+  const fname = path.split('/').pop();
+  return fname.replace(/^\d{4}-\d{2}-\d{2}T[^_]+_/, '').replace(/\.json$/, '').replace(/_/g, ' ');
+}
+
+// ── Rename modal — shared between inspections and site plans. Deliberately
+// not window.prompt(): that's exactly what promptForNewItem() got replaced
+// with in Phase A because it's fragile and outright unsupported in some
+// embedded/webview contexts (it throws there instead of just doing nothing). ──
+let _renamePending = null; // {kind:'inspection'|'siteplan', path, oldName}
+
+function openRenameModal(kind, path, oldName) {
+  _renamePending = { kind, path, oldName };
+  const title = document.getElementById('renameModalTitle');
+  const input = document.getElementById('renameModalInput');
+  if (title) title.textContent = kind === 'siteplan' ? 'Rename site plan' : 'Rename inspection';
+  if (input) input.value = oldName;
+  const overlay = document.getElementById('renameOverlay');
+  if (overlay) overlay.classList.add('open');
+  if (input) setTimeout(() => { input.focus(); input.select(); }, 0);
+}
+
+function closeRenameModal() {
+  const overlay = document.getElementById('renameOverlay');
+  if (overlay) overlay.classList.remove('open');
+  _renamePending = null;
+}
+
+async function confirmRename() {
+  if (!_renamePending) return;
+  const input = document.getElementById('renameModalInput');
+  const trimmed = input ? input.value.trim() : '';
+  const { kind, path, oldName } = _renamePending;
+  closeRenameModal();
+  if (!trimmed || trimmed === oldName) return;
+  try {
+    if (kind === 'siteplan') await _renameSitePlanTo(path, trimmed);
+    else await _renameInspectionTo(path, trimmed);
+  } catch(e) { alert('Could not rename: ' + e.message); }
+}
+
+function renameInspection(path) {
+  openRenameModal('inspection', path, _inspDisplayNameFromPath(path));
+}
+
+async function _renameInspectionTo(path, trimmed) {
+  const dir = path.slice(0, path.lastIndexOf('/') + 1);
+  const oldFile = path.slice(path.lastIndexOf('/') + 1);
+  const tsPrefix = (oldFile.match(/^\d{4}-\d{2}-\d{2}T[^_]+_/) || [''])[0];
+  const slug = trimmed.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '_') || 'inspection';
+  const newPath = dir + tsPrefix + slug + '.json';
+  if (newPath === path) return;
+  const { error } = await _sb.storage.from('inspections').move(path, newPath);
+  if (error) throw error;
+  if (_fieldCurrentPath === path) _fieldCurrentPath = newPath;
   loadInspections();
 }
 
@@ -1409,7 +1471,10 @@ async function loadSitePlans() {
       div.innerHTML = `<div class="plan-icon">🏗️</div>
         <div class="sp-name" title="${_esc(displayName)}">${_esc(displayName)}</div>
         <div class="sp-meta">${date}</div>
-        <button class="sp-del" onclick="event.stopPropagation();deleteSitePlan('${path}')">✕ Delete</button>`;
+        <div style="display:flex;gap:10px;">
+          <button class="sp-rename" onclick="event.stopPropagation();renameSitePlan('${path.replace(/'/g,"\\'")}')">✎ Rename</button>
+          <button class="sp-del" onclick="event.stopPropagation();deleteSitePlan('${path}')">✕ Delete</button>
+        </div>`;
       el.appendChild(div);
     });
   } catch(e) {
@@ -1445,22 +1510,24 @@ async function handleSitePlanUpload(input) {
   } catch(e) { alert('Could not upload site plan: ' + e.message); }
 }
 
-// Renders an uploaded file to a size-capped JPEG data URL: PDFs render
-// page 1 (reusing the pdf.js instance already loaded for plan sheets),
-// images are downscaled if oversized. Keeps the resulting JSON blob small.
+// Renders an uploaded file to a size-capped data URL: PDFs render page 1
+// (reusing the pdf.js instance already loaded for plan sheets), images are
+// downscaled only if oversized. PDFs render to PNG, not JPEG — JPEG's
+// compression blurs and rings around the thin lines/text typical of a CAD
+// site plan, which is exactly what "zoomed in looks bad" was coming from.
 async function _sitePlanFileToImage(file) {
-  const MAX_DIM = 2200;
+  const MAX_DIM = 5000;
   if (file.type === 'application/pdf') {
     const buf = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     const page = await pdf.getPage(1);
     const baseVp = page.getViewport({ scale: 1 });
-    const scale = Math.min(MAX_DIM / baseVp.width, MAX_DIM / baseVp.height, 3);
+    const scale = Math.min(MAX_DIM / baseVp.width, MAX_DIM / baseVp.height, 6);
     const vp = page.getViewport({ scale });
     const canvas = document.createElement('canvas');
     canvas.width = vp.width; canvas.height = vp.height;
     await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
-    return canvas.toDataURL('image/jpeg', 0.9);
+    return canvas.toDataURL('image/png');
   }
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1504,6 +1571,34 @@ async function deleteSitePlan(path) {
   loadSitePlans();
 }
 
+// Like inspections, the display name lives in the filename — renaming is
+// just a storage move(), avoiding a download/re-upload of the JSON body,
+// which now embeds a multi-MB PNG (see _sitePlanFileToImage).
+function _spDisplayNameFromPath(path) {
+  const fname = path.split('/').pop();
+  return fname.replace(/^\d+_/, '').replace(/\.json$/, '').replace(/_/g, ' ');
+}
+
+function renameSitePlan(path) {
+  openRenameModal('siteplan', path, _spDisplayNameFromPath(path));
+}
+
+async function _renameSitePlanTo(path, trimmed) {
+  const dir = path.slice(0, path.lastIndexOf('/') + 1);
+  const oldFile = path.slice(path.lastIndexOf('/') + 1);
+  const idPrefix = (oldFile.match(/^\d+_/) || [''])[0];
+  const slug = trimmed.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '_') || 'site_plan';
+  const newPath = dir + idPrefix + slug + '.json';
+  if (newPath === path) return;
+  const { error } = await _sb.storage.from('site-plans').move(path, newPath);
+  if (error) throw error;
+  if (currentSitePlan && currentSitePlan.path === path) {
+    currentSitePlan.path = newPath;
+    renderSitePlanEditor();
+  }
+  loadSitePlans();
+}
+
 function closeSitePlanEditor() {
   currentSitePlan = null;
   _spSelectedRoomId = null;
@@ -1536,7 +1631,10 @@ function setSpMode(draw) {
 
 function renderSitePlanEditor() {
   if (!currentSitePlan) return;
-  document.getElementById('spTitle').textContent = currentSitePlan.data.name;
+  // Derived from the path, not currentSitePlan.data.name — renameSitePlan()
+  // only moves the file, it doesn't touch the (large) body, so the path is
+  // the source of truth once a rename has happened.
+  document.getElementById('spTitle').textContent = _spDisplayNameFromPath(currentSitePlan.path);
   setSpMode(false);
   const img = document.getElementById('spImage');
   const box = document.getElementById('spImageBox');

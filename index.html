@@ -47,6 +47,16 @@
   </div>
 </div>
 
+<!-- Rename modal (site plans + inspections) -->
+<div id="renameOverlay">
+  <div class="newitem-card">
+    <div class="newitem-title" id="renameModalTitle">Rename</div>
+    <input type="text" id="renameModalInput" class="newitem-input" placeholder="Name" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmRename();}" />
+    <button class="newitem-create" onclick="confirmRename()">Rename</button>
+    <button class="newitem-cancel" onclick="closeRenameModal()">Cancel</button>
+  </div>
+</div>
+
 <!-- Assign inspection to room modal -->
 <div id="spAssignOverlay">
   <div class="assign-card">
