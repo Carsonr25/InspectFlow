@@ -1487,8 +1487,50 @@ async function rotatePdf() {
   zoomFit();
 }
 
+// Resets every per-plan piece of session state — markup items, the QAQC
+// session, vector-scan template/suggestions, detail-legend capture, and
+// whatever mode/panel was active. Without this, opening a different plan
+// (or a different stored plan from the same tab) could leave the PREVIOUS
+// plan's template outline, markup items, or in-progress vector-scan mode
+// bleeding into the newly loaded one, since none of this was ever cleared
+// on load — only on specific exit buttons, which don't cover every path
+// (e.g. loading a new plan mid-vector-scan skips "← Back to items" entirely).
+function _resetPlanSession() {
+  inspectionItems = [];
+  currentSelectedItem = null;
+  qaqcSession = [];
+  findings = [];
+  filteredFindingsForDisplay = [];
+  rejectedFindings = [];
+  preSearchTextLocations = [];
+  templateCanvas = null;
+  originalTemplateCanvas = null;
+  templateCanvas2 = null;
+  templateSelBox = null;
+  templateSelBox2 = null;
+  templateSelBoxOriginal = null;
+  searchRegion = null;
+  detailLegendCaptured = false;
+  _detailRect = null;
+  mode = 'idle';
+  isInVectorReviewMode = false;
+  isInVectorScanForItemFlow = false;
+  isInManualMarkupMode = false;
+  manualBoxStart = null;
+  manualBoxEnd = null;
+  currentTypeMap = [];
+  // Reset panel visibility back to the default items view
+  const so = document.getElementById('sidebarOriginal');
+  const iu = document.getElementById('itemsManagementUI');
+  const mb = document.getElementById('markupModeBar');
+  if (so) so.style.display = 'none';
+  if (iu) iu.style.display = 'block';
+  if (mb) mb.style.display = 'none';
+}
+
 async function handleFile(file) {
   if(!file) return;
+  _resetPlanSession();
   _pdfRotation = 0; // reset rotation for each new file
   // Auto-save to cloud when logged in via drag-drop or file picker
   if (_sb && _sbUser && file.type === 'application/pdf') {
@@ -1545,6 +1587,7 @@ async function handleFile(file) {
     // Show detail folder toggle whenever a drawing is loaded
     renderFolderPanel();
     zoomFit(); hideStatus();
+    renderItemsList(); drawMarkers();
   } catch(e){showError('Could not load: '+e.message);hideStatus();}
 }
 
