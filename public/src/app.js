@@ -1693,7 +1693,7 @@ async function loadSpDashboard() {
     const el = document.getElementById(id);
     if (el) el.textContent = '…';
   });
-  const needs = [], passed = [], failed = [];
+  const needs = [], passed = [], failed = [], todo = [];
   for (const room of currentSitePlan.data.rooms) {
     for (const a of (room.assigned || [])) {
       let insp = _spInspectionCache[a.path];
@@ -1707,21 +1707,66 @@ async function loadSpDashboard() {
       }
       // A newer loadSpDashboard() call (room/assignment changed mid-fetch) supersedes this one.
       if (requestId !== _spDashboardRequestId) return;
+      let firstUnchecked = -1;
       (insp.findings || []).forEach((f, i) => {
         const item = { roomName: room.name, path: a.path, findingIdx: i, label: f.label || f.typeName || ('Item ' + (i + 1)) };
         if (f.status === 'fail') failed.push(item);
         else if (f.status === 'pass') passed.push(item);
-        else needs.push(item);
+        else { needs.push(item); if (firstUnchecked === -1) firstUnchecked = i; }
       });
+      // Only assignments with a due date AND still something unreviewed show
+      // up on the to-do list — once every finding's been checked there's
+      // nothing left to do, due date or not.
+      if (a.dueDate && firstUnchecked !== -1) {
+        todo.push({ roomName: room.name, inspName: a.name, path: a.path, findingIdx: firstUnchecked, dueDate: a.dueDate });
+      }
     }
   }
   if (requestId !== _spDashboardRequestId) return;
-  _spDashboardData = { needs, passed, failed };
+  todo.sort((x, y) => x.dueDate.localeCompare(y.dueDate));
+  _spDashboardData = { needs, passed, failed, todo };
   const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
   setCount('spDashNeedsCount', needs.length);
   setCount('spDashPassedCount', passed.length);
   setCount('spDashFailedCount', failed.length);
+  renderSpDashboardProgress(needs.length, passed.length, failed.length);
   renderSpDashboardList();
+  renderSpTodoList(todo);
+}
+
+function renderSpDashboardProgress(needs, passed, failed) {
+  const total = needs + passed + failed;
+  const fill = document.getElementById('spProgressFill');
+  const label = document.getElementById('spProgressLabel');
+  if (!fill || !label) return;
+  if (total === 0) {
+    fill.style.width = '0%';
+    label.textContent = 'No inspections assigned yet';
+    return;
+  }
+  const pct = Math.round((passed + failed) / total * 100);
+  fill.style.width = pct + '%';
+  label.textContent = `${pct}% reviewed — ${passed + failed} of ${total} items`;
+}
+
+function renderSpTodoList(todo) {
+  const el = document.getElementById('spTodoList');
+  const empty = document.getElementById('spTodoEmpty');
+  if (!el || !empty) return;
+  if (!todo.length) { el.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  const today = _spTodayStr();
+  el.innerHTML = todo.map(it => {
+    const overdue = it.dueDate < today;
+    const dueLabel = new Date(it.dueDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `<div class="sp-todo-item${overdue ? ' overdue' : ''}" onclick="jumpToSpFinding('${it.path.replace(/'/g,"\\'")}',${it.findingIdx})">
+      <span class="sp-todo-due">${overdue ? 'Overdue · ' : ''}${dueLabel}</span>
+      <span class="sp-todo-room">${_esc(it.roomName)}</span>
+      <span class="sp-dash-item-sep">·</span>
+      <span class="sp-dash-item-label">${_esc(it.inspName)}</span>
+      <span class="sp-dash-item-arrow">→</span>
+    </div>`;
+  }).join('');
 }
 
 function selectSpDashboardFilter(kind) {
@@ -1823,7 +1868,19 @@ function renderSpRoomsList() {
         <span class="sp-room-card-name">${_esc(r.name)}</span>
         <button class="sp-room-del" onclick="event.stopPropagation();deleteSpRoom(${r.id})">✕</button>
       </div>
-      ${assigned.map(a => `<div class="sp-assign-chip"><span class="sp-assign-chip-name" onclick="event.stopPropagation();openInspectionByPath('${a.path.replace(/'/g,"\\'")}')">${_esc(a.name)} →</span><button onclick="event.stopPropagation();unassignInspectionFromRoom(${r.id},'${a.path.replace(/'/g,"\\'")}')">✕</button></div>`).join('')}
+      ${assigned.map(a => {
+        const overdue = a.dueDate && a.dueDate < _spTodayStr();
+        return `<div class="sp-assign-chip">
+          <div class="sp-assign-chip-top">
+            <span class="sp-assign-chip-name" onclick="event.stopPropagation();openInspectionByPath('${a.path.replace(/'/g,"\\'")}')">${_esc(a.name)} →</span>
+            <button onclick="event.stopPropagation();unassignInspectionFromRoom(${r.id},'${a.path.replace(/'/g,"\\'")}')">✕</button>
+          </div>
+          <div class="sp-assign-chip-due${overdue ? ' overdue' : ''}">
+            <span>Due</span>
+            <input type="date" value="${a.dueDate || ''}" onclick="event.stopPropagation()" onchange="event.stopPropagation();setAssignmentDueDate(${r.id},'${a.path.replace(/'/g,"\\'")}',this.value)" />
+          </div>
+        </div>`;
+      }).join('')}
       <button class="sp-assign-btn" onclick="event.stopPropagation();openSpAssignModal(${r.id})">+ Assign Inspection</button>
     </div>`;
   }).join('');
@@ -1993,6 +2050,27 @@ function unassignInspectionFromRoom(roomId, path) {
   const room = currentSitePlan.data.rooms.find(r => r.id === roomId);
   if (!room) return;
   room.assigned = (room.assigned || []).filter(a => a.path !== path);
+  renderSpRoomsList();
+  _persistCurrentSitePlan();
+  loadSpDashboard();
+}
+
+// Due dates live on the room's assignment record in the site plan's own
+// JSON, not inside the inspection file itself — same reasoning as renaming:
+// the inspection body can be several MB with embedded photos, and a due
+// date is really a property of "this inspection, in this room, on this
+// plan" anyway, not a property of the inspection file in general.
+function _spTodayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function setAssignmentDueDate(roomId, path, dateStr) {
+  const room = currentSitePlan.data.rooms.find(r => r.id === roomId);
+  if (!room) return;
+  const a = (room.assigned || []).find(a => a.path === path);
+  if (!a) return;
+  a.dueDate = dateStr || null;
   renderSpRoomsList();
   _persistCurrentSitePlan();
   loadSpDashboard();

@@ -300,14 +300,23 @@
   .sp-room-card-top { display:flex; align-items:center; gap:8px; }
   .sp-room-card-name { flex:1; font-size:12px; font-weight:600; color:var(--text); }
   .sp-room-del { background:none; border:none; color:var(--text3); cursor:pointer; font-size:13px; padding:0 2px; line-height:1; }
-  .sp-assign-chip { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--text2); padding:3px 6px; background:var(--surface2); border-radius:4px; margin-top:5px; }
+  .sp-assign-chip { font-size:10px; color:var(--text2); padding:5px 6px; background:var(--surface2); border-radius:4px; margin-top:5px; }
+  .sp-assign-chip-top { display:flex; align-items:center; gap:6px; }
   .sp-assign-chip-name { cursor:pointer; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .sp-assign-chip-name:hover { color:var(--teal); text-decoration:underline; }
   .sp-assign-chip button { background:none; border:none; color:var(--red); cursor:pointer; font-size:11px; padding:0; line-height:1; flex-shrink:0; }
+  .sp-assign-chip-due { display:flex; align-items:center; gap:5px; margin-top:4px; color:var(--text3); }
+  .sp-assign-chip-due input[type="date"] { font-size:10px; font-family:inherit; color:var(--text2); background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:2px 4px; }
+  .sp-assign-chip-due.overdue { color:var(--red); font-weight:700; }
+  .sp-assign-chip-due.overdue input[type="date"] { border-color:var(--red); color:var(--red); }
   .sp-assign-btn { width:100%; margin-top:8px; padding:7px; background:var(--teal); color:#fff; border:none; border-radius:6px; font-weight:600; font-size:11px; cursor:pointer; }
 
   /* ── Site Plan dashboard (its own tab — Site Plan & Rooms is the other) ── */
   #spDashboard { flex:1; overflow-y:auto; background:var(--surface); padding:20px; }
+  .sp-progress-wrap { max-width:640px; margin-bottom:16px; }
+  .sp-progress-bar { height:8px; border-radius:4px; background:var(--surface2); overflow:hidden; }
+  .sp-progress-fill { height:100%; background:var(--teal); border-radius:4px; transition:width 0.25s; }
+  .sp-progress-label { font-size:11px; color:var(--text2); margin-top:6px; }
   .sp-dash-tiles { display:flex; gap:12px; max-width:640px; }
   .sp-dash-tile { flex:1; border:1.5px solid var(--border); border-radius:10px; padding:14px 10px; background:var(--surface2); cursor:pointer; font-family:inherit; text-align:center; transition:border-color 0.15s; }
   .sp-dash-tile:hover { border-color:var(--border2); }
@@ -325,6 +334,14 @@
   .sp-dash-item-label { color:var(--text2); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .sp-dash-item-arrow { color:var(--text3); }
   .sp-dash-empty { font-size:12px; color:var(--text3); padding:10px; }
+  .sp-dash-section-title { font-size:11px; font-weight:700; color:var(--navy); text-transform:uppercase; letter-spacing:0.06em; margin:24px 0 10px; max-width:640px; }
+  #spTodoList { max-width:640px; }
+  .sp-todo-item { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:7px; margin-bottom:6px; cursor:pointer; font-size:12px; background:var(--surface); }
+  .sp-todo-item:hover { border-color:var(--navy); }
+  .sp-todo-item.overdue { border-color:var(--red); background:#fef2f2; }
+  .sp-todo-due { font-weight:700; color:var(--text2); flex-shrink:0; font-size:11px; min-width:80px; }
+  .sp-todo-item.overdue .sp-todo-due { color:var(--red); }
+  .sp-todo-room { font-weight:700; color:var(--text); flex-shrink:0; }
 
   #spAssignOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9200; display:none; align-items:center; justify-content:center; }
   #spAssignOverlay.open { display:flex; }

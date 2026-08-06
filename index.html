@@ -729,6 +729,10 @@
     <button class="sp-view-tab" id="spTabEditor" onclick="setSpView('editor')">🗺️ Site Plan &amp; Rooms</button>
   </div>
   <div id="spDashboard">
+    <div class="sp-progress-wrap">
+      <div class="sp-progress-bar"><div class="sp-progress-fill" id="spProgressFill" style="width:0%;"></div></div>
+      <div class="sp-progress-label" id="spProgressLabel">Loading…</div>
+    </div>
     <div class="sp-dash-tiles">
       <button class="sp-dash-tile needs" data-kind="needs" onclick="selectSpDashboardFilter('needs')">
         <div class="sp-dash-count" id="spDashNeedsCount">…</div>
@@ -744,6 +748,10 @@
       </button>
     </div>
     <div id="spDashList"></div>
+
+    <div class="sp-dash-section-title">To-Do (by due date)</div>
+    <div id="spTodoEmpty" class="sp-dash-empty">Nothing due — set a due date on an assigned inspection to add it here.</div>
+    <div id="spTodoList"></div>
   </div>
   <div id="spBody">
     <div id="spCanvasArea">
