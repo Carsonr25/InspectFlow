@@ -269,14 +269,19 @@
   .sp-rename { font-size:11px; color:var(--text2); background:none; border:none; cursor:pointer; padding:0; opacity:0.75; font-family:inherit; }
   .sp-rename:hover { opacity:1; color:var(--text); }
 
-  /* ── Site Plan editor (full screen) ── */
+  /* ── Site Plan editor (full screen — Dashboard and Site Plan are separate
+     tabs, not stacked; opening a plan always lands on Dashboard first) ── */
   #siteplanWrap { position:fixed; inset:0; background:#1a1a2e; display:none; flex-direction:column; z-index:10; }
   #spTopBar { background:var(--navy); padding:0 16px; height:52px; display:flex; align-items:center; gap:12px; box-shadow:0 2px 12px rgba(0,0,0,0.3); flex-shrink:0; }
   #spTopBar button { font-size:12px; padding:6px 12px; border:1px solid rgba(255,255,255,0.25); border-radius:6px; background:transparent; color:rgba(255,255,255,0.85); cursor:pointer; font-family:inherit; }
   #spTopBar button:hover { background:rgba(255,255,255,0.1); color:#fff; }
   #spMoveBtn.active, #spDrawBtn.active { background:var(--teal); border-color:var(--teal); color:#fff; }
   #spTitle { flex:1; font-size:13px; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  #spBody { flex:1; display:flex; overflow:hidden; }
+  .sp-view-tabs { display:flex; background:#15152a; border-bottom:1px solid rgba(255,255,255,0.08); flex-shrink:0; }
+  .sp-view-tab { flex:1; padding:12px; text-align:center; font-size:12px; font-weight:600; color:rgba(255,255,255,0.55); cursor:pointer; background:none; border:none; border-bottom:2px solid transparent; font-family:inherit; }
+  .sp-view-tab:hover { color:#fff; }
+  .sp-view-tab.active { color:#fff; border-bottom-color:var(--teal); }
+  #spBody { flex:1; display:none; overflow:hidden; }
   #spCanvasArea { flex:1; position:relative; overflow:hidden; background:#2a2a3e; cursor:grab; touch-action:none; }
   #spCanvasArea.panning { cursor:grabbing; }
   #spZoomContent { position:absolute; top:0; left:0; transform-origin:0 0; will-change:transform; }
@@ -296,8 +301,32 @@
   .sp-room-card-name { flex:1; font-size:12px; font-weight:600; color:var(--text); }
   .sp-room-del { background:none; border:none; color:var(--text3); cursor:pointer; font-size:13px; padding:0 2px; line-height:1; }
   .sp-assign-chip { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--text2); padding:3px 6px; background:var(--surface2); border-radius:4px; margin-top:5px; }
-  .sp-assign-chip button { background:none; border:none; color:var(--red); cursor:pointer; font-size:11px; padding:0; line-height:1; margin-left:auto; }
+  .sp-assign-chip-name { cursor:pointer; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sp-assign-chip-name:hover { color:var(--teal); text-decoration:underline; }
+  .sp-assign-chip button { background:none; border:none; color:var(--red); cursor:pointer; font-size:11px; padding:0; line-height:1; flex-shrink:0; }
   .sp-assign-btn { width:100%; margin-top:8px; padding:7px; background:var(--teal); color:#fff; border:none; border-radius:6px; font-weight:600; font-size:11px; cursor:pointer; }
+
+  /* ── Site Plan dashboard (its own tab — Site Plan & Rooms is the other) ── */
+  #spDashboard { flex:1; overflow-y:auto; background:var(--surface); padding:20px; }
+  .sp-dash-tiles { display:flex; gap:12px; max-width:640px; }
+  .sp-dash-tile { flex:1; border:1.5px solid var(--border); border-radius:10px; padding:14px 10px; background:var(--surface2); cursor:pointer; font-family:inherit; text-align:center; transition:border-color 0.15s; }
+  .sp-dash-tile:hover { border-color:var(--border2); }
+  .sp-dash-tile.active { border-color:var(--navy); background:var(--surface); }
+  .sp-dash-count { font-size:24px; font-weight:800; color:var(--text); line-height:1.1; }
+  .sp-dash-tile.needs .sp-dash-count { color:#b45309; }
+  .sp-dash-tile.passed .sp-dash-count { color:#0F6E56; }
+  .sp-dash-tile.failed .sp-dash-count { color:#ef4444; }
+  .sp-dash-label { font-size:11px; font-weight:600; color:var(--text2); margin-top:4px; text-transform:uppercase; letter-spacing:0.04em; }
+  #spDashList { display:none; max-width:640px; margin-top:12px; max-height:220px; overflow-y:auto; }
+  .sp-dash-item { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:7px; margin-bottom:6px; cursor:pointer; font-size:12px; background:var(--surface); }
+  .sp-dash-item:hover { border-color:var(--navy); }
+  .sp-dash-item-room { font-weight:700; color:var(--text); flex-shrink:0; }
+  .sp-dash-item-sep { color:var(--text3); }
+  .sp-dash-item-label { color:var(--text2); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sp-dash-item-arrow { color:var(--text3); }
+  .sp-dash-empty { font-size:12px; color:var(--text3); padding:10px; }
+  .sp-dash-open-editor { display:block; margin-top:24px; padding:12px 20px; background:var(--navy); color:#fff; border:none; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; font-family:inherit; }
+  .sp-dash-open-editor:hover { background:var(--navy2); }
 
   #spAssignOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9200; display:none; align-items:center; justify-content:center; }
   #spAssignOverlay.open { display:flex; }

@@ -720,10 +720,32 @@
   <div id="spTopBar">
     <button onclick="closeSitePlanEditor()">← Back</button>
     <div id="spTitle">Site Plan</div>
-    <div style="display:flex;gap:6px;">
+    <div id="spEditorTools" style="display:none;gap:6px;">
       <button id="spMoveBtn" onclick="setSpMode(false)">🖐 Move</button>
       <button id="spDrawBtn" onclick="setSpMode(true)">✎ Draw Room</button>
     </div>
+  </div>
+  <div class="sp-view-tabs">
+    <button class="sp-view-tab active" id="spTabDashboard" onclick="setSpView('dashboard')">📊 Dashboard</button>
+    <button class="sp-view-tab" id="spTabEditor" onclick="setSpView('editor')">🗺️ Site Plan &amp; Rooms</button>
+  </div>
+  <div id="spDashboard">
+    <div class="sp-dash-tiles">
+      <button class="sp-dash-tile needs" data-kind="needs" onclick="selectSpDashboardFilter('needs')">
+        <div class="sp-dash-count" id="spDashNeedsCount">…</div>
+        <div class="sp-dash-label">Needs Inspection</div>
+      </button>
+      <button class="sp-dash-tile passed" data-kind="passed" onclick="selectSpDashboardFilter('passed')">
+        <div class="sp-dash-count" id="spDashPassedCount">…</div>
+        <div class="sp-dash-label">Passed</div>
+      </button>
+      <button class="sp-dash-tile failed" data-kind="failed" onclick="selectSpDashboardFilter('failed')">
+        <div class="sp-dash-count" id="spDashFailedCount">…</div>
+        <div class="sp-dash-label">Failed</div>
+      </button>
+    </div>
+    <div id="spDashList"></div>
+    <button class="sp-dash-open-editor" onclick="setSpView('editor')">🗺️ View Site Plan &amp; Rooms →</button>
   </div>
   <div id="spBody">
     <div id="spCanvasArea">

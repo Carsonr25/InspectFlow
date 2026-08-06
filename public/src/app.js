@@ -1603,6 +1603,8 @@ function closeSitePlanEditor() {
   currentSitePlan = null;
   _spSelectedRoomId = null;
   _spDrawMode = false;
+  _spDashboardData = null;
+  _spDashboardFilter = null;
   showDash();
   switchDashTab('siteplans');
 }
@@ -1636,6 +1638,7 @@ function renderSitePlanEditor() {
   // the source of truth once a rename has happened.
   document.getElementById('spTitle').textContent = _spDisplayNameFromPath(currentSitePlan.path);
   setSpMode(false);
+  setSpView('dashboard'); // opening a plan always lands on the dashboard first
   const img = document.getElementById('spImage');
   const box = document.getElementById('spImageBox');
   img.onload = () => {
@@ -1644,11 +1647,104 @@ function renderSitePlanEditor() {
     // system to work in — the transform then handles all visual scaling.
     box.style.width = img.naturalWidth + 'px';
     box.style.height = img.naturalHeight + 'px';
-    spZoomFit();
+    // spCanvasArea is display:none while the Dashboard tab is active, so its
+    // rect is 0x0 right now — setSpView('editor') calls spZoomFit() again
+    // once the Site Plan tab is actually shown and has real dimensions.
+    if (_spView === 'editor') spZoomFit();
   };
   img.src = currentSitePlan.data.image;
   renderSpRoomsOverlay();
   renderSpRoomsList();
+  loadSpDashboard();
+}
+
+// ── Dashboard / Site Plan tab switch — opening a plan always lands on the
+// dashboard; the actual rooms editor is a deliberate second step away. ──
+let _spView = 'dashboard';
+
+function setSpView(view) {
+  _spView = view;
+  const isDash = view === 'dashboard';
+  document.getElementById('spDashboard').style.display = isDash ? 'block' : 'none';
+  document.getElementById('spBody').style.display = isDash ? 'none' : 'flex';
+  document.getElementById('spEditorTools').style.display = isDash ? 'none' : 'flex';
+  document.getElementById('spTabDashboard').classList.toggle('active', isDash);
+  document.getElementById('spTabEditor').classList.toggle('active', !isDash);
+  if (!isDash) spZoomFit(); // recompute now that the canvas actually has real dimensions
+}
+
+// ── Site Plan dashboard — rolls up every finding across every inspection
+// assigned to any room on this plan into three buckets (needs inspection /
+// passed / failed), same status values the field viewer already uses per
+// finding. Clicking a tile lists the matching findings; clicking one of
+// those opens the actual inspection straight to that finding. ──
+let _spInspectionCache = {}; // path -> parsed inspection JSON, avoids re-downloading on every recompute
+let _spDashboardData = null; // {needs:[...], passed:[...], failed:[...]}
+let _spDashboardFilter = null;
+let _spDashboardRequestId = 0;
+
+async function loadSpDashboard() {
+  if (!currentSitePlan || !_sb) return;
+  const requestId = ++_spDashboardRequestId;
+  ['spDashNeedsCount', 'spDashPassedCount', 'spDashFailedCount'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '…';
+  });
+  const needs = [], passed = [], failed = [];
+  for (const room of currentSitePlan.data.rooms) {
+    for (const a of (room.assigned || [])) {
+      let insp = _spInspectionCache[a.path];
+      if (!insp) {
+        try {
+          const { data, error } = await _sb.storage.from('inspections').download(a.path);
+          if (error) throw error;
+          insp = JSON.parse(await data.text());
+          _spInspectionCache[a.path] = insp;
+        } catch(e) { continue; }
+      }
+      // A newer loadSpDashboard() call (room/assignment changed mid-fetch) supersedes this one.
+      if (requestId !== _spDashboardRequestId) return;
+      (insp.findings || []).forEach((f, i) => {
+        const item = { roomName: room.name, path: a.path, findingIdx: i, label: f.label || f.typeName || ('Item ' + (i + 1)) };
+        if (f.status === 'fail') failed.push(item);
+        else if (f.status === 'pass') passed.push(item);
+        else needs.push(item);
+      });
+    }
+  }
+  if (requestId !== _spDashboardRequestId) return;
+  _spDashboardData = { needs, passed, failed };
+  const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+  setCount('spDashNeedsCount', needs.length);
+  setCount('spDashPassedCount', passed.length);
+  setCount('spDashFailedCount', failed.length);
+  renderSpDashboardList();
+}
+
+function selectSpDashboardFilter(kind) {
+  _spDashboardFilter = (_spDashboardFilter === kind) ? null : kind;
+  renderSpDashboardList();
+}
+
+function renderSpDashboardList() {
+  document.querySelectorAll('.sp-dash-tile').forEach(t => t.classList.toggle('active', t.dataset.kind === _spDashboardFilter));
+  const el = document.getElementById('spDashList');
+  if (!el) return;
+  if (!_spDashboardFilter || !_spDashboardData) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const items = _spDashboardData[_spDashboardFilter];
+  el.style.display = 'block';
+  if (!items.length) { el.innerHTML = '<div class="sp-dash-empty">Nothing here.</div>'; return; }
+  el.innerHTML = items.map(it => `<div class="sp-dash-item" onclick="jumpToSpFinding('${it.path.replace(/'/g,"\\'")}',${it.findingIdx})">
+    <span class="sp-dash-item-room">${_esc(it.roomName)}</span>
+    <span class="sp-dash-item-sep">·</span>
+    <span class="sp-dash-item-label">${_esc(it.label)}</span>
+    <span class="sp-dash-item-arrow">→</span>
+  </div>`).join('');
+}
+
+async function jumpToSpFinding(path, findingIdx) {
+  await openInspectionByPath(path);
+  openFieldSheet(findingIdx);
 }
 
 // ── Zoom / pan for the site plan canvas — same translate+scale transform
@@ -1724,7 +1820,7 @@ function renderSpRoomsList() {
         <span class="sp-room-card-name">${_esc(r.name)}</span>
         <button class="sp-room-del" onclick="event.stopPropagation();deleteSpRoom(${r.id})">✕</button>
       </div>
-      ${assigned.map(a => `<div class="sp-assign-chip"><span>${_esc(a.name)}</span><button onclick="event.stopPropagation();unassignInspectionFromRoom(${r.id},'${a.path.replace(/'/g,"\\'")}')">✕</button></div>`).join('')}
+      ${assigned.map(a => `<div class="sp-assign-chip"><span class="sp-assign-chip-name" onclick="event.stopPropagation();openInspectionByPath('${a.path.replace(/'/g,"\\'")}')">${_esc(a.name)} →</span><button onclick="event.stopPropagation();unassignInspectionFromRoom(${r.id},'${a.path.replace(/'/g,"\\'")}')">✕</button></div>`).join('')}
       <button class="sp-assign-btn" onclick="event.stopPropagation();openSpAssignModal(${r.id})">+ Assign Inspection</button>
     </div>`;
   }).join('');
@@ -1743,6 +1839,7 @@ function deleteSpRoom(id) {
   renderSpRoomsOverlay();
   renderSpRoomsList();
   _persistCurrentSitePlan();
+  loadSpDashboard();
 }
 
 // ── Drawing a new room rectangle, plus wheel-zoom and drag-to-pan, on the
@@ -1886,6 +1983,7 @@ function assignInspectionToRoom(path, name) {
   closeSpAssignModal();
   renderSpRoomsList();
   _persistCurrentSitePlan();
+  loadSpDashboard();
 }
 
 function unassignInspectionFromRoom(roomId, path) {
@@ -1894,6 +1992,7 @@ function unassignInspectionFromRoom(roomId, path) {
   room.assigned = (room.assigned || []).filter(a => a.path !== path);
   renderSpRoomsList();
   _persistCurrentSitePlan();
+  loadSpDashboard();
 }
 
 async function handleDashUpload(input) {
