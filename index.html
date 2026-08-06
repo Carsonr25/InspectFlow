@@ -57,6 +57,18 @@
   </div>
 </div>
 
+<!-- Generic confirm modal — replaces window.confirm(), which (like prompt())
+     is unreliable in some embedded/webview contexts and silently does
+     nothing there instead of asking the user anything. -->
+<div id="confirmOverlay">
+  <div class="newitem-card">
+    <div class="newitem-title" id="confirmModalTitle">Are you sure?</div>
+    <div class="newitem-sub" id="confirmModalSub"></div>
+    <button class="newitem-create" id="confirmModalYesBtn" onclick="_confirmModalAnswer(true)" style="background:var(--red);">Delete</button>
+    <button class="newitem-cancel" onclick="_confirmModalAnswer(false)">Cancel</button>
+  </div>
+</div>
+
 <!-- Assign inspection to room modal -->
 <div id="spAssignOverlay">
   <div class="assign-card">

@@ -1142,6 +1142,28 @@ function _inspDisplayNameFromPath(path) {
   return fname.replace(/^\d{4}-\d{2}-\d{2}T[^_]+_/, '').replace(/\.json$/, '').replace(/_/g, ' ');
 }
 
+// ── Generic confirm modal — replaces window.confirm() for anything new.
+// Same reasoning as the rename modal replacing window.prompt(): native
+// dialogs are unreliable in some embedded/webview contexts, where they
+// just silently no-op instead of asking the user anything — which is
+// exactly what "the delete button doesn't work" turned out to be.
+let _confirmResolve = null;
+
+function appConfirm(message, opts = {}) {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById('confirmModalTitle').textContent = opts.title || 'Are you sure?';
+    document.getElementById('confirmModalSub').textContent = message;
+    document.getElementById('confirmModalYesBtn').textContent = opts.confirmLabel || 'Delete';
+    document.getElementById('confirmOverlay').classList.add('open');
+  });
+}
+
+function _confirmModalAnswer(v) {
+  document.getElementById('confirmOverlay').classList.remove('open');
+  if (_confirmResolve) { _confirmResolve(v); _confirmResolve = null; }
+}
+
 // ── Rename modal — shared between inspections and site plans. Deliberately
 // not window.prompt(): that's exactly what promptForNewItem() got replaced
 // with in Phase A because it's fragile and outright unsupported in some
@@ -1565,7 +1587,7 @@ async function openSitePlan(path) {
 }
 
 async function deleteSitePlan(path) {
-  if (!confirm('Delete this site plan? This cannot be undone.')) return;
+  if (!await appConfirm('Delete this site plan? This cannot be undone.')) return;
   const { error } = await _sb.storage.from('site-plans').remove([path]);
   if (error) { alert('Delete failed: ' + error.message); return; }
   loadSitePlans();
@@ -1892,8 +1914,8 @@ function selectSpRoom(id) {
   renderSpRoomsList();
 }
 
-function deleteSpRoom(id) {
-  if (!confirm('Delete this room?')) return;
+async function deleteSpRoom(id) {
+  if (!await appConfirm('Delete this room?')) return;
   currentSitePlan.data.rooms = currentSitePlan.data.rooms.filter(r => r.id !== id);
   if (_spSelectedRoomId === id) _spSelectedRoomId = null;
   renderSpRoomsOverlay();

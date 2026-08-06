@@ -349,6 +349,8 @@
   #roomNameOverlay.open { display:flex; }
   #renameOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9200; display:none; align-items:center; justify-content:center; }
   #renameOverlay.open { display:flex; }
+  #confirmOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9300; display:none; align-items:center; justify-content:center; }
+  #confirmOverlay.open { display:flex; }
 
   /* ── Organization pane ── */
   .org-empty { text-align:center; padding:48px 16px; }
