@@ -157,7 +157,6 @@
     <div class="dash-tabs">
       <button class="dash-tab active" id="tabPlans" onclick="switchDashTab('plans')">📐 Plans</button>
       <button class="dash-tab" id="tabInspections" onclick="switchDashTab('inspections')">📋 Inspections</button>
-      <button class="dash-tab" id="tabSitePlans" onclick="switchDashTab('siteplans')">🏗️ Site Plans</button>
       <button class="dash-tab" id="tabOrg" onclick="switchDashTab('org')">🏢 Organization</button>
     </div>
 
@@ -177,15 +176,6 @@
         <h1>My Inspections</h1>
       </div>
       <div id="inspectionsGrid"><div class="dash-loader">Loading…</div></div>
-    </div>
-
-    <!-- Site Plans pane -->
-    <div class="dash-pane" id="paneSP">
-      <div class="dash-header">
-        <h1>Site Plans</h1>
-        <button class="dash-new-btn" onclick="triggerSitePlanUpload()">+ New Site Plan</button>
-      </div>
-      <div id="sitePlansGrid" class="plans-grid"><div class="dash-loader">Loading…</div></div>
     </div>
 
     <!-- Organization pane -->

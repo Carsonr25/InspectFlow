@@ -45,19 +45,15 @@ function showDash() {
 function switchDashTab(tab) {
   const isPlans = tab === 'plans';
   const isInsp  = tab === 'inspections';
-  const isSP    = tab === 'siteplans';
   const isOrg   = tab === 'org';
   document.getElementById('tabPlans').classList.toggle('active', isPlans);
   document.getElementById('tabInspections').classList.toggle('active', isInsp);
-  document.getElementById('tabSitePlans').classList.toggle('active', isSP);
   document.getElementById('tabOrg').classList.toggle('active', isOrg);
   document.getElementById('paneP').classList.toggle('active', isPlans);
   document.getElementById('paneI').classList.toggle('active', isInsp);
-  document.getElementById('paneSP').classList.toggle('active', isSP);
   document.getElementById('paneOrg').classList.toggle('active', isOrg);
   if (isPlans) loadPlans();
   else if (isInsp) loadInspections();
-  else if (isSP) loadSitePlans();
   else if (isOrg) loadOrgPane();
 }
 function showTool() {
@@ -852,58 +848,112 @@ async function loadDisciplines(encodedJob) {
   const grid = document.getElementById('plansGrid');
   grid.innerHTML = '<div class="dash-loader">Loading…</div>';
   try {
-    const { data, error } = await _sb.storage.from('plans').list(_sbUser.id + '/' + _currentJob + '/');
+    const [plansResult, sitePlansHtml] = await Promise.all([
+      _sb.storage.from('plans').list(_sbUser.id + '/' + _currentJob + '/'),
+      _loadJobSitePlansHtml(_currentJob)
+    ]);
+    const { data, error } = plansResult;
     if (error) throw error;
     const discs = (data || []).filter(f => f.name && !f.name.startsWith('.') && f.metadata == null);
+
+    let discsHtml;
     if (discs.length === 0) {
-      grid.innerHTML = `<div class="plans-empty"><div class="empty-icon">📂</div><p>No plans yet.<br>Upload a plan to this job.</p></div>`;
-      return;
-    }
-    // Load all disciplines and their files in parallel
-    let sections = await Promise.all(discs.map(async d => {
-      const prefix = `${_sbUser.id}/${_currentJob}/${d.name}/`;
-      const { data: files } = await _sb.storage.from('plans').list(prefix, { sortBy:{ column:'created_at', order:'desc' } });
-      return { disc: d.name, files: (files || []).filter(f => f.name && !f.name.startsWith('.') && f.metadata != null) };
-    }));
-    _lastDiscNames = sections.map(s => s.disc);
-    const order = getDisciplineOrder(_currentJob, _lastDiscNames);
-    sections = order.map(name => sections.find(s => s.disc === name)).filter(Boolean);
-    const ej = encodeURIComponent(_currentJob);
-    grid.innerHTML = sections.map(({ disc, files }, idx) => {
-      const ed   = encodeURIComponent(disc);
-      const jSafeOrd = _currentJob.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      const dSafeOrd = disc.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      const filesHtml = files.length === 0
-        ? `<div style="font-size:12px;color:var(--text3);padding:8px 0;">No plans yet</div>`
-        : `<div class="plans-grid">${files.map(f => {
-            const date  = f.created_at ? new Date(f.created_at).toLocaleDateString() : '';
-            const enc   = encodeURIComponent(f.name);
-            const fSafe = f.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-            const dSafe = disc.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-            const jSafe = _currentJob.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-            return `<div class="plan-card" onclick="openStoredPlan('${ej}','${ed}','${enc}')">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <div class="plan-icon">📄</div>
-                <button class="dots-btn" onclick="event.stopPropagation();openCtxMenu(event,{type:'plan',job:'${jSafe}',disc:'${dSafe}',name:'${fSafe}'})" title="Options">⋯</button>
-              </div>
-              <div class="plan-name" title="${f.name}">${f.name}</div>
-              <div class="plan-date">${date}</div>
-            </div>`;
-          }).join('')}</div>`;
-      return `<div style="margin-bottom:24px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1.5px solid var(--border);">
-          <span style="font-size:13px;font-weight:700;color:var(--text);">${disc}</span>
-          <span style="font-size:11px;color:var(--text3);margin-left:4px;">${files.length} plan${files.length!==1?'s':''}</span>
-          <div style="margin-left:auto;display:flex;gap:2px;">
-            <button onclick="moveDiscipline('${jSafeOrd}','${dSafeOrd}',-1)" ${idx===0?'disabled':''} title="Move up" style="background:none;border:1px solid var(--border);border-radius:4px;width:22px;height:22px;cursor:${idx===0?'default':'pointer'};color:${idx===0?'var(--text3)':'var(--text2)'};font-size:11px;line-height:1;">↑</button>
-            <button onclick="moveDiscipline('${jSafeOrd}','${dSafeOrd}',1)" ${idx===sections.length-1?'disabled':''} title="Move down" style="background:none;border:1px solid var(--border);border-radius:4px;width:22px;height:22px;cursor:${idx===sections.length-1?'default':'pointer'};color:${idx===sections.length-1?'var(--text3)':'var(--text2)'};font-size:11px;line-height:1;">↓</button>
+      discsHtml = `<div class="plans-empty"><div class="empty-icon">📂</div><p>No plans yet.<br>Upload a plan to this job.</p></div>`;
+    } else {
+      // Load all disciplines and their files in parallel
+      let sections = await Promise.all(discs.map(async d => {
+        const prefix = `${_sbUser.id}/${_currentJob}/${d.name}/`;
+        const { data: files } = await _sb.storage.from('plans').list(prefix, { sortBy:{ column:'created_at', order:'desc' } });
+        return { disc: d.name, files: (files || []).filter(f => f.name && !f.name.startsWith('.') && f.metadata != null) };
+      }));
+      _lastDiscNames = sections.map(s => s.disc);
+      const order = getDisciplineOrder(_currentJob, _lastDiscNames);
+      sections = order.map(name => sections.find(s => s.disc === name)).filter(Boolean);
+      const ej = encodeURIComponent(_currentJob);
+      discsHtml = sections.map(({ disc, files }, idx) => {
+        const ed   = encodeURIComponent(disc);
+        const jSafeOrd = _currentJob.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        const dSafeOrd = disc.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        const filesHtml = files.length === 0
+          ? `<div style="font-size:12px;color:var(--text3);padding:8px 0;">No plans yet</div>`
+          : `<div class="plans-grid">${files.map(f => {
+              const date  = f.created_at ? new Date(f.created_at).toLocaleDateString() : '';
+              const enc   = encodeURIComponent(f.name);
+              const fSafe = f.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+              const dSafe = disc.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+              const jSafe = _currentJob.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+              return `<div class="plan-card" onclick="openStoredPlan('${ej}','${ed}','${enc}')">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                  <div class="plan-icon">📄</div>
+                  <button class="dots-btn" onclick="event.stopPropagation();openCtxMenu(event,{type:'plan',job:'${jSafe}',disc:'${dSafe}',name:'${fSafe}'})" title="Options">⋯</button>
+                </div>
+                <div class="plan-name" title="${f.name}">${f.name}</div>
+                <div class="plan-date">${date}</div>
+              </div>`;
+            }).join('')}</div>`;
+        return `<div style="grid-column:1/-1;margin-bottom:24px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1.5px solid var(--border);">
+            <span style="font-size:13px;font-weight:700;color:var(--text);">${disc}</span>
+            <span style="font-size:11px;color:var(--text3);margin-left:4px;">${files.length} plan${files.length!==1?'s':''}</span>
+            <div style="margin-left:auto;display:flex;gap:2px;">
+              <button onclick="moveDiscipline('${jSafeOrd}','${dSafeOrd}',-1)" ${idx===0?'disabled':''} title="Move up" style="background:none;border:1px solid var(--border);border-radius:4px;width:22px;height:22px;cursor:${idx===0?'default':'pointer'};color:${idx===0?'var(--text3)':'var(--text2)'};font-size:11px;line-height:1;">↑</button>
+              <button onclick="moveDiscipline('${jSafeOrd}','${dSafeOrd}',1)" ${idx===sections.length-1?'disabled':''} title="Move down" style="background:none;border:1px solid var(--border);border-radius:4px;width:22px;height:22px;cursor:${idx===sections.length-1?'default':'pointer'};color:${idx===sections.length-1?'var(--text3)':'var(--text2)'};font-size:11px;line-height:1;">↓</button>
+            </div>
           </div>
-        </div>
-        ${filesHtml}
-      </div>`;
-    }).join('');
+          ${filesHtml}
+        </div>`;
+      }).join('');
+    }
+    grid.innerHTML = discsHtml + sitePlansHtml;
   } catch(e) {
     grid.innerHTML = `<div class="dash-loader">Could not load: ${e.message}</div>`;
+  }
+}
+
+// Site plans now live under a job (uid/job/id_slug.json in the 'site-plans'
+// bucket), same shape as the 'plans' bucket's job folders — rendered as its
+// own section at the bottom of the job page rather than a separate tab.
+async function _loadJobSitePlansHtml(job) {
+  if (!_sb || !_sbUser) return '';
+  try {
+    const { data, error } = await _sb.storage.from('site-plans')
+      .list(`${_sbUser.id}/${job}/`, { sortBy: { column: 'created_at', order: 'desc' } });
+    if (error) throw error;
+    const files = (data || []).filter(f => f.name && f.name.endsWith('.json'));
+    const cardsHtml = files.length === 0
+      ? `<div style="font-size:12px;color:var(--text3);padding:8px 0;">No site plans yet.</div>`
+      : `<div class="plans-grid">${files.map(f => {
+          const displayName = f.name.replace(/^\d+_/, '').replace(/\.json$/, '').replace(/_/g, ' ');
+          const date = f.created_at ? new Date(f.created_at).toLocaleDateString() : '';
+          const path = `${_sbUser.id}/${job}/${f.name}`;
+          const pathEsc = path.replace(/'/g,"\\'");
+          return `<div class="sp-card" onclick="openSitePlan('${pathEsc}')">
+            <div class="plan-icon">🏗️</div>
+            <div class="sp-name" title="${_esc(displayName)}">${_esc(displayName)}</div>
+            <div class="sp-meta">${date}</div>
+            <div style="display:flex;gap:10px;">
+              <button class="sp-rename" onclick="event.stopPropagation();renameSitePlan('${pathEsc}')">✎ Rename</button>
+              <button class="sp-del" onclick="event.stopPropagation();deleteSitePlan('${pathEsc}')">✕ Delete</button>
+            </div>
+          </div>`;
+        }).join('')}</div>`;
+    return `<div style="grid-column:1/-1;margin-bottom:24px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1.5px solid var(--border);">
+        <span style="font-size:13px;font-weight:700;color:var(--text);">🏗️ Site Plans</span>
+        <span style="font-size:11px;color:var(--text3);margin-left:4px;">${files.length} plan${files.length !== 1 ? 's' : ''}</span>
+        <button class="dash-new-btn" style="margin-left:auto;font-size:11px;padding:5px 10px;" onclick="triggerSitePlanUpload()">+ New Site Plan</button>
+      </div>
+      ${cardsHtml}
+    </div>`;
+  } catch(e) {
+    // Note: list() on a missing bucket returns [] with no error (see the
+    // upload-time bucket-missing note in _sitePlanFileToImage's callers) —
+    // this catch only fires for genuine errors, e.g. a real network failure.
+    const missing = e.message && (e.message.includes('not found') || e.message.includes('does not exist') || e.message.includes('Bucket not found'));
+    return `<div style="grid-column:1/-1;margin-bottom:24px;">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">🏗️ Site Plans</div>
+      ${missing ? SITE_PLANS_BUCKET_HINT : `<div style="font-size:12px;color:var(--text3);">Could not load site plans: ${_esc(e.message)}</div>`}
+    </div>`;
   }
 }
 
@@ -1471,47 +1521,8 @@ function toggleSpChipMenu(key) {
 
 const SITE_PLANS_BUCKET_HINT = `<div class="plans-empty"><div class="empty-icon">🏗️</div><p>Storage bucket "site-plans" isn't set up yet.<br>Create a private bucket named <b>site-plans</b> in Supabase (Storage → New bucket), then reload.</p></div>`;
 
-async function loadSitePlans() {
-  const el = document.getElementById('sitePlansGrid');
-  if (!_sb || !_sbUser) { el.innerHTML = '<div class="dash-loader">Log in to see site plans.</div>'; return; }
-  el.innerHTML = '<div class="dash-loader">Loading…</div>';
-  try {
-    // Note: getBucket()/listBuckets() require more than the anon key has —
-    // they 404 even for buckets that exist and work fine via list/upload/
-    // download, so bucket-missing can only be inferred from a real
-    // operation's error (list() itself returns [] with no error either way).
-    const { data, error } = await _sb.storage.from('site-plans')
-      .list(_sbUser.id + '/', { sortBy: { column: 'created_at', order: 'desc' } });
-    if (error) throw error;
-    const files = (data || []).filter(f => f.name && f.name.endsWith('.json'));
-    if (files.length === 0) {
-      el.innerHTML = `<div class="plans-empty"><div class="empty-icon">🏗️</div><p>No site plans yet.<br>Upload one to start marking out rooms.</p></div>`;
-      return;
-    }
-    el.innerHTML = '';
-    files.forEach(f => {
-      const displayName = f.name.replace(/^\d+_/, '').replace(/\.json$/, '').replace(/_/g, ' ');
-      const date = f.created_at ? new Date(f.created_at).toLocaleDateString() : '';
-      const path = _sbUser.id + '/' + f.name;
-      const div = document.createElement('div');
-      div.className = 'sp-card';
-      div.onclick = () => openSitePlan(path);
-      div.innerHTML = `<div class="plan-icon">🏗️</div>
-        <div class="sp-name" title="${_esc(displayName)}">${_esc(displayName)}</div>
-        <div class="sp-meta">${date}</div>
-        <div style="display:flex;gap:10px;">
-          <button class="sp-rename" onclick="event.stopPropagation();renameSitePlan('${path.replace(/'/g,"\\'")}')">✎ Rename</button>
-          <button class="sp-del" onclick="event.stopPropagation();deleteSitePlan('${path}')">✕ Delete</button>
-        </div>`;
-      el.appendChild(div);
-    });
-  } catch(e) {
-    const missing = e.message && (e.message.includes('not found') || e.message.includes('does not exist') || e.message.includes('Bucket not found'));
-    el.innerHTML = missing ? SITE_PLANS_BUCKET_HINT : `<div class="dash-loader">Could not load site plans: ${e.message}</div>`;
-  }
-}
-
 function triggerSitePlanUpload() {
+  if (!_currentJob) { alert('Open a job first — site plans live under a job now.'); return; }
   document.getElementById('sitePlanFileInput').click();
 }
 
@@ -1520,12 +1531,13 @@ async function handleSitePlanUpload(input) {
   if (!file) return;
   input.value = '';
   if (!_sb || !_sbUser) { alert('Log in to upload a site plan.'); return; }
+  if (!_currentJob) { alert('Open a job first — site plans live under a job now.'); return; }
   try {
     const image = await _sitePlanFileToImage(file);
     const name = file.name.replace(/\.[^.]+$/, '');
     const id = Date.now();
     const slug = name.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '_') || 'site_plan';
-    const path = `${_sbUser.id}/${id}_${slug}.json`;
+    const path = `${_sbUser.id}/${_currentJob}/${id}_${slug}.json`;
     const data = { id, name, image, rooms: [], createdAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     const { error } = await _sb.storage.from('site-plans').upload(path, blob, { upsert: true });
@@ -1585,6 +1597,10 @@ async function openSitePlan(path) {
     const parsed = JSON.parse(text);
     parsed.rooms = parsed.rooms || [];
     currentSitePlan = { path, data: parsed };
+    // path is uid/job/filename.json — keep _currentJob in sync so "Back"
+    // out of the editor returns to the right job's page.
+    const job = path.split('/')[1];
+    if (job) _currentJob = job;
     _spSelectedRoomId = null;
     _spDrawMode = false;
     showSitePlanEditor();
@@ -1596,7 +1612,7 @@ async function deleteSitePlan(path) {
   if (!await appConfirm('Delete this site plan? This cannot be undone.')) return;
   const { error } = await _sb.storage.from('site-plans').remove([path]);
   if (error) { alert('Delete failed: ' + error.message); return; }
-  loadSitePlans();
+  if (_currentJob) loadDisciplines(encodeURIComponent(_currentJob));
 }
 
 // Like inspections, the display name lives in the filename — renaming is
@@ -1624,17 +1640,24 @@ async function _renameSitePlanTo(path, trimmed) {
     currentSitePlan.path = newPath;
     renderSitePlanEditor();
   }
-  loadSitePlans();
+  if (_currentJob) loadDisciplines(encodeURIComponent(_currentJob));
 }
 
 function closeSitePlanEditor() {
+  const job = _currentJob;
   currentSitePlan = null;
   _spSelectedRoomId = null;
   _spDrawMode = false;
   _spDashboardData = null;
   _spDashboardFilter = null;
   showDash();
-  switchDashTab('siteplans');
+  // showDash() picks a default tab itself (Inspections on mobile) — force
+  // Plans active instead, since closing a site plan should always return
+  // to the job it came from, not whatever tab showDash() defaults to.
+  ['tabPlans','tabInspections','tabOrg'].forEach(id => document.getElementById(id).classList.toggle('active', id === 'tabPlans'));
+  ['paneP','paneI','paneOrg'].forEach(id => document.getElementById(id).classList.toggle('active', id === 'paneP'));
+  if (job) loadDisciplines(encodeURIComponent(job));
+  else loadPlans();
 }
 
 async function _persistCurrentSitePlan() {
