@@ -304,11 +304,14 @@
   .sp-assign-chip-top { display:flex; align-items:center; gap:6px; }
   .sp-assign-chip-name { cursor:pointer; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .sp-assign-chip-name:hover { color:var(--teal); text-decoration:underline; }
-  .sp-assign-chip button { background:none; border:none; color:var(--red); cursor:pointer; font-size:11px; padding:0; line-height:1; flex-shrink:0; }
-  .sp-assign-chip-due { display:flex; align-items:center; gap:5px; margin-top:4px; color:var(--text3); }
-  .sp-assign-chip-due input[type="date"] { font-size:10px; font-family:inherit; color:var(--text2); background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:2px 4px; }
-  .sp-assign-chip-due.overdue { color:var(--red); font-weight:700; }
-  .sp-assign-chip-due.overdue input[type="date"] { border-color:var(--red); color:var(--red); }
+  .sp-assign-chip-due-badge { font-size:9px; font-weight:700; padding:1px 5px; border-radius:3px; background:var(--surface); color:var(--text2); flex-shrink:0; white-space:nowrap; }
+  .sp-assign-chip-due-badge.overdue { background:#fef2f2; color:var(--red); }
+  .sp-assign-chip-menu-btn { background:none; border:none; color:var(--text3); cursor:pointer; font-size:14px; padding:0 2px; line-height:1; flex-shrink:0; }
+  .sp-assign-chip-menu-btn:hover { color:var(--text); }
+  .sp-assign-chip-menu { margin-top:6px; padding-top:6px; border-top:1px dashed var(--border); display:flex; flex-direction:column; gap:7px; }
+  .sp-assign-chip-menu-item { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+  .sp-assign-chip-menu-item input[type="date"] { font-size:10px; font-family:inherit; color:var(--text2); background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:2px 4px; }
+  .sp-assign-chip-menu-unassign { background:none; border:none; color:var(--red); cursor:pointer; font-size:10px; font-weight:600; padding:0; text-align:left; }
   .sp-assign-btn { width:100%; margin-top:8px; padding:7px; background:var(--teal); color:#fff; border:none; border-radius:6px; font-weight:600; font-size:11px; cursor:pointer; }
 
   /* ── Site Plan dashboard (its own tab — Site Plan & Rooms is the other) ── */

@@ -1462,6 +1462,12 @@ let _spSelectedRoomId = null;
 let _spDrawMode       = false;
 let _spPendingRoomRect = null; // {xPct,yPct,wPct,hPct} awaiting a name
 let _spAssignRoomId   = null;
+let _spOpenChipMenu   = null; // "roomId|path" of the currently open assignment-chip ⋮ menu, or null
+
+function toggleSpChipMenu(key) {
+  _spOpenChipMenu = (_spOpenChipMenu === key) ? null : key;
+  renderSpRoomsList();
+}
 
 const SITE_PLANS_BUCKET_HINT = `<div class="plans-empty"><div class="empty-icon">🏗️</div><p>Storage bucket "site-plans" isn't set up yet.<br>Create a private bucket named <b>site-plans</b> in Supabase (Storage → New bucket), then reload.</p></div>`;
 
@@ -1891,16 +1897,24 @@ function renderSpRoomsList() {
         <button class="sp-room-del" onclick="event.stopPropagation();deleteSpRoom(${r.id})">✕</button>
       </div>
       ${assigned.map(a => {
+        const key = r.id + '|' + a.path;
         const overdue = a.dueDate && a.dueDate < _spTodayStr();
+        const dueLabel = a.dueDate ? (overdue ? 'Overdue' : new Date(a.dueDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : null;
+        const menuOpen = _spOpenChipMenu === key;
+        const pathEsc = a.path.replace(/'/g,"\\'");
         return `<div class="sp-assign-chip">
           <div class="sp-assign-chip-top">
-            <span class="sp-assign-chip-name" onclick="event.stopPropagation();openInspectionByPath('${a.path.replace(/'/g,"\\'")}')">${_esc(a.name)} →</span>
-            <button onclick="event.stopPropagation();unassignInspectionFromRoom(${r.id},'${a.path.replace(/'/g,"\\'")}')">✕</button>
+            <span class="sp-assign-chip-name" onclick="event.stopPropagation();openInspectionByPath('${pathEsc}')">${_esc(a.name)} →</span>
+            ${dueLabel ? `<span class="sp-assign-chip-due-badge${overdue ? ' overdue' : ''}">${dueLabel}</span>` : ''}
+            <button class="sp-assign-chip-menu-btn" onclick="event.stopPropagation();toggleSpChipMenu('${key.replace(/'/g,"\\'")}')">⋮</button>
           </div>
-          <div class="sp-assign-chip-due${overdue ? ' overdue' : ''}">
-            <span>Due</span>
-            <input type="date" value="${a.dueDate || ''}" onclick="event.stopPropagation()" onchange="event.stopPropagation();setAssignmentDueDate(${r.id},'${a.path.replace(/'/g,"\\'")}',this.value)" />
-          </div>
+          ${menuOpen ? `<div class="sp-assign-chip-menu" onclick="event.stopPropagation()">
+            <label class="sp-assign-chip-menu-item">
+              <span>📅 Due date</span>
+              <input type="date" value="${a.dueDate || ''}" onchange="setAssignmentDueDate(${r.id},'${pathEsc}',this.value)" />
+            </label>
+            <button class="sp-assign-chip-menu-unassign" onclick="unassignInspectionFromRoom(${r.id},'${pathEsc}')">✕ Unassign</button>
+          </div>` : ''}
         </div>`;
       }).join('')}
       <button class="sp-assign-btn" onclick="event.stopPropagation();openSpAssignModal(${r.id})">+ Assign Inspection</button>
@@ -2072,6 +2086,7 @@ function unassignInspectionFromRoom(roomId, path) {
   const room = currentSitePlan.data.rooms.find(r => r.id === roomId);
   if (!room) return;
   room.assigned = (room.assigned || []).filter(a => a.path !== path);
+  if (_spOpenChipMenu === roomId + '|' + path) _spOpenChipMenu = null;
   renderSpRoomsList();
   _persistCurrentSitePlan();
   loadSpDashboard();
