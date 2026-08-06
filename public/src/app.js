@@ -1913,6 +1913,7 @@ function renderSpRoomsList() {
               <span>📅 Due date</span>
               <input type="date" value="${a.dueDate || ''}" onchange="setAssignmentDueDate(${r.id},'${pathEsc}',this.value)" />
             </label>
+            ${a.dueDate ? `<button class="sp-assign-chip-menu-clear" onclick="setAssignmentDueDate(${r.id},'${pathEsc}','')">Turn off due date</button>` : ''}
             <button class="sp-assign-chip-menu-unassign" onclick="unassignInspectionFromRoom(${r.id},'${pathEsc}')">✕ Unassign</button>
           </div>` : ''}
         </div>`;
