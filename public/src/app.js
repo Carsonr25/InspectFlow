@@ -928,18 +928,17 @@ async function _loadJobSitePlansHtml(job) {
           const path = `${_sbUser.id}/${job}/${f.name}`;
           const pathEsc = path.replace(/'/g,"\\'");
           return `<div class="sp-card" onclick="openSitePlan('${pathEsc}')">
-            <div class="plan-icon">🏗️</div>
             <div class="sp-name" title="${_esc(displayName)}">${_esc(displayName)}</div>
             <div class="sp-meta">${date}</div>
             <div style="display:flex;gap:10px;">
-              <button class="sp-rename" onclick="event.stopPropagation();renameSitePlan('${pathEsc}')">✎ Rename</button>
-              <button class="sp-del" onclick="event.stopPropagation();deleteSitePlan('${pathEsc}')">✕ Delete</button>
+              <button class="sp-rename" onclick="event.stopPropagation();renameSitePlan('${pathEsc}')">Rename</button>
+              <button class="sp-del" onclick="event.stopPropagation();deleteSitePlan('${pathEsc}')">Delete</button>
             </div>
           </div>`;
         }).join('')}</div>`;
     return `<div style="grid-column:1/-1;margin-bottom:24px;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1.5px solid var(--border);">
-        <span style="font-size:13px;font-weight:700;color:var(--text);">🏗️ Site Plans</span>
+        <span style="font-size:13px;font-weight:700;color:var(--text);">Site Plans</span>
         <span style="font-size:11px;color:var(--text3);margin-left:4px;">${files.length} plan${files.length !== 1 ? 's' : ''}</span>
         <button class="dash-new-btn" style="margin-left:auto;font-size:11px;padding:5px 10px;" onclick="triggerSitePlanUpload()">+ New Site Plan</button>
       </div>
@@ -951,7 +950,7 @@ async function _loadJobSitePlansHtml(job) {
     // this catch only fires for genuine errors, e.g. a real network failure.
     const missing = e.message && (e.message.includes('not found') || e.message.includes('does not exist') || e.message.includes('Bucket not found'));
     return `<div style="grid-column:1/-1;margin-bottom:24px;">
-      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">🏗️ Site Plans</div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">Site Plans</div>
       ${missing ? SITE_PLANS_BUCKET_HINT : `<div style="font-size:12px;color:var(--text3);">Could not load site plans: ${_esc(e.message)}</div>`}
     </div>`;
   }
@@ -1519,7 +1518,7 @@ function toggleSpChipMenu(key) {
   renderSpRoomsList();
 }
 
-const SITE_PLANS_BUCKET_HINT = `<div class="plans-empty"><div class="empty-icon">🏗️</div><p>Storage bucket "site-plans" isn't set up yet.<br>Create a private bucket named <b>site-plans</b> in Supabase (Storage → New bucket), then reload.</p></div>`;
+const SITE_PLANS_BUCKET_HINT = `<div class="plans-empty"><p>Storage bucket "site-plans" isn't set up yet.<br>Create a private bucket named <b>site-plans</b> in Supabase (Storage → New bucket), then reload.</p></div>`;
 
 function triggerSitePlanUpload() {
   if (!_currentJob) { alert('Open a job first — site plans live under a job now.'); return; }
@@ -1677,7 +1676,7 @@ function setSpMode(draw) {
   const drawBtn = document.getElementById('spDrawBtn');
   const vp = document.getElementById('spCanvasArea');
   if (drawBtn) {
-    drawBtn.textContent = draw ? '✕ Done Drawing' : '✎ Draw Room';
+    drawBtn.textContent = draw ? 'Done Drawing' : 'Draw Room';
     drawBtn.classList.toggle('active', draw);
   }
   if (vp) vp.style.cursor = draw ? 'crosshair' : 'grab';
@@ -1933,11 +1932,11 @@ function renderSpRoomsList() {
           </div>
           ${menuOpen ? `<div class="sp-assign-chip-menu" onclick="event.stopPropagation()">
             <label class="sp-assign-chip-menu-item">
-              <span>📅 Due date</span>
+              <span>Due date</span>
               <input type="date" value="${a.dueDate || ''}" onchange="setAssignmentDueDate(${r.id},'${pathEsc}',this.value)" />
             </label>
             ${a.dueDate ? `<button class="sp-assign-chip-menu-clear" onclick="setAssignmentDueDate(${r.id},'${pathEsc}','')">Turn off due date</button>` : ''}
-            <button class="sp-assign-chip-menu-unassign" onclick="unassignInspectionFromRoom(${r.id},'${pathEsc}')">✕ Unassign</button>
+            <button class="sp-assign-chip-menu-unassign" onclick="unassignInspectionFromRoom(${r.id},'${pathEsc}')">Unassign</button>
           </div>` : ''}
         </div>`;
       }).join('')}
@@ -2082,7 +2081,7 @@ async function openSpAssignModal(roomId) {
       const displayName = f.name.replace(/^\d{4}-\d{2}-\d{2}T[^_]+_/, '').replace(/\.json$/, '').replace(/_/g,' ');
       const path = _sbUser.id + '/' + f.name;
       return `<div class="assign-member" onclick="assignInspectionToRoom('${path.replace(/'/g,"\\'")}','${displayName.replace(/'/g,"\\'")}')">
-        <div class="assign-member-avatar">📋</div>
+        <div class="assign-member-avatar">${_esc((displayName||'?')[0].toUpperCase())}</div>
         <span class="assign-member-email">${_esc(displayName)}</span></div>`;
     }).join('');
   } catch(e) {
