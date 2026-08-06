@@ -272,11 +272,11 @@
   /* ── Site Plan editor (full screen — Dashboard and Site Plan are separate
      tabs, not stacked; opening a plan always lands on Dashboard first) ── */
   #siteplanWrap { position:fixed; inset:0; background:#1a1a2e; display:none; flex-direction:column; z-index:10; }
-  #spTopBar { background:var(--navy); padding:0 16px; height:52px; display:flex; align-items:center; gap:12px; box-shadow:0 2px 12px rgba(0,0,0,0.3); flex-shrink:0; }
+  #spTopBar { position:relative; background:var(--navy); padding:0 16px; height:52px; display:flex; align-items:center; justify-content:space-between; gap:12px; box-shadow:0 2px 12px rgba(0,0,0,0.3); flex-shrink:0; }
   #spTopBar button { font-size:12px; padding:6px 12px; border:1px solid rgba(255,255,255,0.25); border-radius:6px; background:transparent; color:rgba(255,255,255,0.85); cursor:pointer; font-family:inherit; }
   #spTopBar button:hover { background:rgba(255,255,255,0.1); color:#fff; }
-  #spMoveBtn.active, #spDrawBtn.active { background:var(--teal); border-color:var(--teal); color:#fff; }
-  #spTitle { flex:1; font-size:13px; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #spDrawBtn.active { background:var(--teal); border-color:var(--teal); color:#fff; }
+  #spTitle { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); max-width:45%; font-size:13px; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
   .sp-view-tabs { display:flex; background:#15152a; border-bottom:1px solid rgba(255,255,255,0.08); flex-shrink:0; }
   .sp-view-tab { flex:1; padding:12px; text-align:center; font-size:12px; font-weight:600; color:rgba(255,255,255,0.55); cursor:pointer; background:none; border:none; border-bottom:2px solid transparent; font-family:inherit; }
   .sp-view-tab:hover { color:#fff; }
@@ -325,8 +325,6 @@
   .sp-dash-item-label { color:var(--text2); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .sp-dash-item-arrow { color:var(--text3); }
   .sp-dash-empty { font-size:12px; color:var(--text3); padding:10px; }
-  .sp-dash-open-editor { display:block; margin-top:24px; padding:12px 20px; background:var(--navy); color:#fff; border:none; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; font-family:inherit; }
-  .sp-dash-open-editor:hover { background:var(--navy2); }
 
   #spAssignOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9200; display:none; align-items:center; justify-content:center; }
   #spAssignOverlay.open { display:flex; }

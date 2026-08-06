@@ -1618,18 +1618,21 @@ async function _persistCurrentSitePlan() {
   } catch(e) { console.warn('[QAQC] site plan save failed', e); }
 }
 
-// Explicit Move/Draw toggle (two buttons, not one) — draw mode used to stay
-// on indefinitely after placing a room, silently turning every subsequent
-// drag into a new room instead of a pan, with no obvious way back to panning.
+// Single self-toggling button: click to enter draw mode (drag places rooms,
+// stays on so you can place several in a row), click again — now labeled
+// "Done" — to drop back to the default pan/select mode.
 function setSpMode(draw) {
   _spDrawMode = draw;
-  const moveBtn = document.getElementById('spMoveBtn');
   const drawBtn = document.getElementById('spDrawBtn');
   const vp = document.getElementById('spCanvasArea');
-  if (moveBtn) moveBtn.classList.toggle('active', !draw);
-  if (drawBtn) drawBtn.classList.toggle('active', draw);
+  if (drawBtn) {
+    drawBtn.textContent = draw ? '✕ Done Drawing' : '✎ Draw Room';
+    drawBtn.classList.toggle('active', draw);
+  }
   if (vp) vp.style.cursor = draw ? 'crosshair' : 'grab';
 }
+
+function toggleSpDrawMode() { setSpMode(!_spDrawMode); }
 
 function renderSitePlanEditor() {
   if (!currentSitePlan) return;

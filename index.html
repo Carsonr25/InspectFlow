@@ -721,8 +721,7 @@
     <button onclick="closeSitePlanEditor()">← Back</button>
     <div id="spTitle">Site Plan</div>
     <div id="spEditorTools" style="display:none;gap:6px;">
-      <button id="spMoveBtn" onclick="setSpMode(false)">🖐 Move</button>
-      <button id="spDrawBtn" onclick="setSpMode(true)">✎ Draw Room</button>
+      <button id="spDrawBtn" onclick="toggleSpDrawMode()">✎ Draw Room</button>
     </div>
   </div>
   <div class="sp-view-tabs">
@@ -745,7 +744,6 @@
       </button>
     </div>
     <div id="spDashList"></div>
-    <button class="sp-dash-open-editor" onclick="setSpView('editor')">🗺️ View Site Plan &amp; Rooms →</button>
   </div>
   <div id="spBody">
     <div id="spCanvasArea">
