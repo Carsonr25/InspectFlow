@@ -5395,6 +5395,32 @@ async function generateFieldReport(payload) {
   const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'letter' });
   const PW=279, PH=216, M=14;
 
+  // ── Design system: quiet neutrals + one confident accent, instead of
+  // the previous mix of navy/blue/red/green solid-fill blocks. Pass/fail
+  // colors stay wired to their functional meaning everywhere else (status
+  // bars, markers) — this only governs the "decorative" chrome: section
+  // headers, rules, table chrome. ──
+  const INK = [26,26,26], INK_SOFT = [110,110,116], RULE = [222,222,222];
+  const ACCENT = [180,83,9]; // warm amber — construction-adjacent, not a status color
+  const PASS_C = [22,163,74], FAIL_C = [220,38,38], NEUTRAL_C = [130,130,136];
+  const TABLE_HEAD = { fillColor:[250,250,250], textColor:INK, fontStyle:'bold', lineColor:RULE, lineWidth:0.3 };
+  const TABLE_BODY_LINE = { lineColor:RULE, lineWidth:0.2 };
+  // Draws a section header as a bold label + thin accent rule underneath
+  // (replaces the old solid-color filled bars) and returns the y to start
+  // content at below it.
+  function sectionHeader(x, y, w, label, opts={}) {
+    doc.setTextColor(...(opts.color||INK)); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+    doc.text(label, x, y+7);
+    doc.setDrawColor(...(opts.ruleColor||ACCENT)); doc.setLineWidth(0.7);
+    doc.line(x, y+10, x+w, y+10);
+    if (opts.subtitle) {
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...INK_SOFT);
+      doc.text(opts.subtitle, x, y+15);
+      return y+21;
+    }
+    return y+16;
+  }
+
   const total      = payload.findings.length;
   const passed     = payload.findings.filter(f=>f.status==='pass').length;
   const failed     = payload.findings.filter(f=>f.status==='fail').length;
@@ -5402,32 +5428,30 @@ async function generateFieldReport(payload) {
   const passPct    = total ? Math.round(passed/total*100) : 0;
 
   // ── Page 1: Summary + overview ──
-  // Header bar
-  doc.setFillColor(15,39,68);
-  doc.rect(M,M,PW-M*2,18,'F');
-  doc.setTextColor(255,255,255);
-  doc.setFont('helvetica','bold'); doc.setFontSize(15);
-  doc.text((payload.drawingName || 'QAQC FIELD INSPECTION REPORT').toUpperCase(), M+5, M+10);
-  doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
-  doc.text(`Project: ${projectName||'—'}  ·  Inspector: ${inspector||'—'}  ·  Date: ${today}`, M+5, M+16);
+  doc.setTextColor(...INK); doc.setFont('helvetica','bold'); doc.setFontSize(20);
+  doc.text((payload.drawingName || 'QAQC Field Inspection Report'), M, M+9);
+  doc.setDrawColor(...ACCENT); doc.setLineWidth(0.9);
+  doc.line(M, M+13, M+46, M+13);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...INK_SOFT);
+  doc.text(`Project: ${projectName||'—'}   ·   Inspector: ${inspector||'—'}   ·   Date: ${today}`, M, M+20);
 
-  // Stat cards — white with a colored left accent bar instead of a solid
-  // color fill, softer and more modern-looking.
-  const statY = M+24, statW = (PW-M*2)/4, statH = 28;
+  // Stat cards — white with a colored left accent bar; neutral ink for the
+  // headline pass-rate metric instead of an arbitrary blue.
+  const statY = M+27, statW = (PW-M*2)/4, statH = 28;
   const statDefs = [
-    { label:'PASSED',       val:passed,      fg:[22,163,74]  },
-    { label:'FAILED',       val:failed,      fg:[220,38,38]  },
-    { label:'NOT REVIEWED', val:notDone,     fg:[100,116,139]},
-    { label:'PASS RATE',    val:passPct+'%', fg:[37,99,235]  },
+    { label:'PASSED',       val:passed,      fg:PASS_C    },
+    { label:'FAILED',       val:failed,      fg:FAIL_C    },
+    { label:'NOT REVIEWED', val:notDone,     fg:NEUTRAL_C },
+    { label:'PASS RATE',    val:passPct+'%', fg:INK       },
   ];
   statDefs.forEach((s,i) => {
     const x = M + i*statW, w = statW-3;
-    doc.setFillColor(250,251,253); doc.roundedRect(x, statY, w, statH, 2.5,2.5,'F');
-    doc.setDrawColor(228,232,240); doc.setLineWidth(0.3); doc.roundedRect(x, statY, w, statH, 2.5,2.5,'S');
+    doc.setFillColor(252,252,253); doc.roundedRect(x, statY, w, statH, 2.5,2.5,'F');
+    doc.setDrawColor(...RULE); doc.setLineWidth(0.3); doc.roundedRect(x, statY, w, statH, 2.5,2.5,'S');
     doc.setFillColor(...s.fg); doc.roundedRect(x, statY, 1.4, statH, 0.7,0.7,'F');
     doc.setTextColor(...s.fg); doc.setFont('helvetica','bold'); doc.setFontSize(23);
     doc.text(String(s.val), x+w/2+0.5, statY+17, {align:'center'});
-    doc.setTextColor(100,110,130); doc.setFontSize(6.5);
+    doc.setTextColor(...INK_SOFT); doc.setFontSize(6.5);
     doc.text(s.label, x+w/2+0.5, statY+24, {align:'center'});
   });
 
@@ -5488,31 +5512,23 @@ async function generateFieldReport(payload) {
     let cursorY = M;
 
     if (hasLocatorPage) {
-      doc.setFillColor(220,38,38);
-      doc.roundedRect(M, cursorY, PW-M*2, 14, 2,2,'F');
-      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
-      doc.text('FAILED ITEMS', M+4, cursorY+9.5);
-
+      const contentY = sectionHeader(M, cursorY, PW-M*2, 'Failed Items', { color:FAIL_C, ruleColor:FAIL_C });
       doc.autoTable({
-        startY: cursorY+18,
+        startY: contentY,
         head: [['Failed Item']],
         body: failedFindings.map(o => [findingTitle(o.f, o.i)]),
-        styles:{ fontSize:10, cellPadding:4, valign:'middle', fontStyle:'bold', textColor:[153,27,27] },
-        headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:9 },
+        styles:{ fontSize:10, cellPadding:4, valign:'middle', fontStyle:'bold', textColor:FAIL_C, ...TABLE_BODY_LINE },
+        headStyles:{ ...TABLE_HEAD, fontSize:9 },
         margin:{ top:M, left:M, right:M },
-        alternateRowStyles:{ fillColor:[254,242,242] },
+        alternateRowStyles:{ fillColor:[253,247,246] },
       });
-      cursorY = doc.lastAutoTable.finalY + 10;
+      cursorY = doc.lastAutoTable.finalY + 12;
     }
 
     if (hasSummaryPage) {
-      doc.setFillColor(15,39,68);
-      doc.rect(M, cursorY, PW-M*2, 14, 'F');
-      doc.setTextColor(255,255,255);
-      doc.setFont('helvetica','bold'); doc.setFontSize(12);
-      doc.text('ITEM SUMMARY — BY TYPE', M+4, cursorY+9);
-      doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
-      doc.text(`Project: ${projectName||'—'}  ·  Inspector: ${inspector||'—'}  ·  Date: ${today}`, M+4, cursorY+13);
+      const contentY = sectionHeader(M, cursorY, PW-M*2, 'Item Summary — by Type', {
+        subtitle: `Project: ${projectName||'—'}  ·  Inspector: ${inspector||'—'}  ·  Date: ${today}`,
+      });
 
       const summaryRows = summaryKeys.map(key => {
         const groupFindings = summaryGroups[key];
@@ -5524,17 +5540,17 @@ async function generateFieldReport(payload) {
       });
 
       doc.autoTable({
-        startY: cursorY+18,
+        startY: contentY,
         head:[['Type','Count','Passed','Failed','Not Reviewed','Pass Rate']],
         body: summaryRows,
-        styles:{ fontSize:8.5, cellPadding:3, valign:'middle' },
-        headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:8.5 },
+        styles:{ fontSize:8.5, cellPadding:3, valign:'middle', ...TABLE_BODY_LINE },
+        headStyles: TABLE_HEAD,
         columnStyles:{
           0:{ cellWidth:'auto', fontStyle:'bold' },
           1:{ cellWidth:22, halign:'center' },
-          2:{ cellWidth:26, halign:'center', textColor:[22,163,74] },
-          3:{ cellWidth:26, halign:'center', textColor:[220,38,38] },
-          4:{ cellWidth:30, halign:'center', textColor:[100,116,139] },
+          2:{ cellWidth:26, halign:'center', textColor:PASS_C },
+          3:{ cellWidth:26, halign:'center', textColor:FAIL_C },
+          4:{ cellWidth:30, halign:'center', textColor:NEUTRAL_C },
           5:{ cellWidth:26, halign:'center', fontStyle:'bold' },
         },
         margin:{ top:M, left:M, right:M },
@@ -5546,13 +5562,9 @@ async function generateFieldReport(payload) {
   // independent of whether the Item Summary page rendered. ──
   if (hasChecklistPage) {
       doc.addPage();
-      doc.setFillColor(15,39,68);
-      doc.rect(M, M, PW-M*2, 14, 'F');
-      doc.setTextColor(255,255,255);
-      doc.setFont('helvetica','bold'); doc.setFontSize(12);
-      doc.text('INSPECTION CHECKLIST', M+4, M+9);
-      doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
-      doc.text(`Project: ${projectName||'—'}  ·  Inspector: ${inspector||'—'}  ·  Date: ${today}`, M+4, M+13);
+      const contentY = sectionHeader(M, M, PW-M*2, 'Inspection Checklist', {
+        subtitle: `Project: ${projectName||'—'}  ·  Inspector: ${inspector||'—'}  ·  Date: ${today}`,
+      });
 
       const tableRows = [];
       let qn = 1;
@@ -5582,15 +5594,15 @@ async function generateFieldReport(payload) {
       });
 
       doc.autoTable({
-        startY: M+16,
+        startY: contentY,
         head:[['#','Inspection Item','Field Tally','Pass','Fail','PE Notes']],
         body: tableRows,
-        styles:{ fontSize:8, cellPadding:2.5, valign:'middle', overflow:'linebreak', minCellHeight:7 },
-        headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:8 },
+        styles:{ fontSize:8, cellPadding:2.5, valign:'middle', overflow:'linebreak', minCellHeight:7, ...TABLE_BODY_LINE },
+        headStyles:{ ...TABLE_HEAD, fontSize:8 },
         columnStyles:{
           0:{ cellWidth:8,  halign:'center', fontStyle:'bold' },
           1:{ cellWidth:'auto' },
-          2:{ cellWidth:28, halign:'center', textColor:[60,80,100] },
+          2:{ cellWidth:28, halign:'center', textColor:INK_SOFT },
           3:{ cellWidth:14, halign:'center' },
           4:{ cellWidth:14, halign:'center' },
           5:{ cellWidth:30 },
@@ -5613,29 +5625,27 @@ async function generateFieldReport(payload) {
   // that, with a big empty gap when there was no photo). ──
   if (failedFindings.length > 0 && typeof doc.autoTable === 'function') {
     doc.addPage();
-    doc.setFillColor(220,38,38); doc.roundedRect(M,M,PW-M*2,10,2,2,'F');
-    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
-    doc.text('FAILED ITEMS', M+4, M+7);
+    const contentY = sectionHeader(M, M, PW-M*2, 'Failed Items', { color:FAIL_C, ruleColor:FAIL_C });
 
     const IMG = 28; // fixed square size every drawing crop is placed at
     const PHOTO_W = IMG * FAILED_PHOTO_AR;
     doc.autoTable({
-      startY: M+14,
+      startY: contentY,
       head: [['Drawing','Photo','Item','Notes']],
       body: failedFindings.map(o => [
         '', '', findingTitle(o.f, o.i),
         o.f.notes ? (o.f.notes.length>140 ? o.f.notes.slice(0,137)+'…' : o.f.notes) : '—',
       ]),
-      styles:{ fontSize:9, cellPadding:3, valign:'middle', minCellHeight:IMG+6 },
-      headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:8.5 },
+      styles:{ fontSize:9, cellPadding:3, valign:'middle', minCellHeight:IMG+6, ...TABLE_BODY_LINE },
+      headStyles:{ ...TABLE_HEAD, fontSize:8.5 },
       columnStyles:{
         0:{ cellWidth:IMG+6 },
         1:{ cellWidth:PHOTO_W+6 },
-        2:{ cellWidth:48, fontStyle:'bold', textColor:[185,28,28] },
-        3:{ cellWidth:'auto', textColor:[80,80,90] },
+        2:{ cellWidth:48, fontStyle:'bold', textColor:FAIL_C },
+        3:{ cellWidth:'auto', textColor:INK_SOFT },
       },
       margin:{ top:M, left:M, right:M },
-      alternateRowStyles:{ fillColor:[255,247,247] },
+      alternateRowStyles:{ fillColor:[253,247,246] },
       didDrawCell(data) {
         if (data.row.section!=='body') return;
         const o = failedFindings[data.row.index];
@@ -5664,31 +5674,29 @@ async function generateFieldReport(payload) {
   const otherFindings = payload.findings.map((f,i)=>({f,i})).filter(o=>o.f.status!=='fail');
   if (otherFindings.length > 0 && typeof doc.autoTable === 'function') {
     doc.addPage();
-    doc.setFillColor(15,39,68); doc.roundedRect(M,M,PW-M*2,10,2,2,'F');
-    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
-    doc.text('PASSED / NOT REVIEWED', M+4, M+7);
+    const contentY = sectionHeader(M, M, PW-M*2, 'Passed / Not Reviewed', { ruleColor:RULE });
 
     const THUMB = 10;
     doc.autoTable({
-      startY: M+14,
+      startY: contentY,
       head: [['','Item','Status','Notes']],
       body: otherFindings.map(o => [
         '', findingTitle(o.f, o.i),
         o.f.status==='pass'?'PASS':'NOT REVIEWED',
         o.f.notes ? (o.f.notes.length>50?o.f.notes.slice(0,47)+'…':o.f.notes) : '—',
       ]),
-      styles:{ fontSize:7.5, cellPadding:2, valign:'middle', minCellHeight:THUMB+2 },
-      headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:7.5 },
+      styles:{ fontSize:7.5, cellPadding:2, valign:'middle', minCellHeight:THUMB+2, ...TABLE_BODY_LINE },
+      headStyles:{ ...TABLE_HEAD, fontSize:7.5 },
       columnStyles:{
         0:{ cellWidth:THUMB+4 },
         1:{ cellWidth:'auto', fontStyle:'bold' },
         2:{ cellWidth:24, halign:'center' },
-        3:{ cellWidth:80, textColor:[100,110,130] },
+        3:{ cellWidth:80, textColor:INK_SOFT },
       },
       margin:{ top:M, left:M, right:M },
       didParseCell(data) {
         if (data.column.index===2 && data.row.section==='body') {
-          data.cell.styles.textColor = data.cell.raw==='PASS' ? [22,163,74] : [100,116,139];
+          data.cell.styles.textColor = data.cell.raw==='PASS' ? PASS_C : NEUTRAL_C;
           data.cell.styles.fontStyle = 'bold';
         }
       },
