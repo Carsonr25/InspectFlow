@@ -1602,6 +1602,13 @@ async function openSitePlan(path) {
     if (job) _currentJob = job;
     _spSelectedRoomId = null;
     _spDrawMode = false;
+    // Inspection JSONs downloaded for the dashboard get cached in memory
+    // (see loadSpDashboard) so repeated assign/unassign/room edits within
+    // one open of the plan don't re-download every time. But that means a
+    // stale cache would keep showing pre-edit findings if you'd reviewed
+    // an inspection elsewhere and come back — dropping it here, on every
+    // fresh open of a plan, is the natural point to force a re-fetch.
+    _spInspectionCache = {};
     showSitePlanEditor();
     renderSitePlanEditor();
   } catch(e) { alert('Could not open site plan: ' + e.message); }
