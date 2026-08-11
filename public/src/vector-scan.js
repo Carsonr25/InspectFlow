@@ -5330,8 +5330,12 @@ async function generateFieldReport(payload) {
     img.src = useNativeCanvas ? pdfCanvas.toDataURL('image/jpeg', 0.92) : payload.imageDataUrl;
   });
 
-  // Pre-render a zoomed crop for each finding
-  for (const f of payload.findings) {
+  // Pre-render a zoomed crop for each finding, with the finding's number
+  // burned directly into the marker (not just shown as PDF text elsewhere
+  // on the card) so it's identifiable from the image alone — failed items
+  // get a bigger marker so they read as more important even as a thumbnail.
+  const FAILED_PHOTO_AR = 4/3; // every failed-item photo gets cover-cropped to this, so phone photos of any orientation end up the same size on the page instead of each being letterboxed to its own aspect ratio
+  for (const [fi, f] of payload.findings.entries()) {
     const cx = f.xPct * NW, cy = f.yPct * NH;
     const fw = f.wPct * NW, fh = f.hPct * NH;
     const pad = Math.max(fw, fh) * 1.4;
@@ -5339,7 +5343,7 @@ async function generateFieldReport(payload) {
     const sy = Math.max(0, cy - fh/2 - pad);
     const sw = Math.min(NW - sx, fw + pad*2);
     const sh = Math.min(NH - sy, fh + pad*2);
-    const SIZE = 1200; // high-res crop for sharp PDF output
+    const SIZE = 1200; // high-res crop for sharp PDF output — always square, so it's never stretched when placed into a square box later
     const cc = document.createElement('canvas');
     cc.width = SIZE; cc.height = SIZE;
     const ctx = cc.getContext('2d');
@@ -5349,26 +5353,38 @@ async function generateFieldReport(payload) {
     const dw = Math.round(sw*sc), dh = Math.round(sh*sc);
     // Draw from native canvas if available, else from the loaded Image
     ctx.drawImage(useNativeCanvas ? pdfCanvas : drawingImg, sx, sy, sw, sh, (SIZE-dw)/2, (SIZE-dh)/2, dw, dh);
-    // Circle marker
+    // Marker: filled circle with the finding's number burned into the pixels.
     const mx = (cx-sx)*sc + (SIZE-dw)/2;
     const my = (cy-sy)*sc + (SIZE-dh)/2;
-    ctx.beginPath(); ctx.arc(mx, my, SIZE*0.045, 0, Math.PI*2);
-    const col = f.status==='pass'?'#16a34a':f.status==='fail'?'#dc2626':(f.color||'#0d9488');
-    ctx.strokeStyle = col; ctx.lineWidth = Math.round(SIZE*0.008); ctx.stroke();
-    ctx.fillStyle = col; ctx.globalAlpha = 0.15;
-    ctx.fill(); ctx.globalAlpha = 1;
+    const isFail = f.status==='fail';
+    const col = f.status==='pass'?'#16a34a':isFail?'#dc2626':(f.color||'#0d9488');
+    const rad = SIZE * (isFail ? 0.085 : 0.055);
+    ctx.beginPath(); ctx.arc(mx, my, rad, 0, Math.PI*2);
+    ctx.fillStyle = col; ctx.fill();
+    ctx.lineWidth = SIZE*0.006; ctx.strokeStyle = '#fff'; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = `700 ${Math.round(rad*1.05)}px -apple-system,Helvetica,sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(fi+1), mx, my+rad*0.06);
     f._crop = cc.toDataURL('image/jpeg', 0.92);
 
-    // Pre-load each field photo to get its natural dimensions (for aspect-ratio-correct PDF placement)
-    f._photoSizes = [];
+    // Cover-crop each field photo to a fixed aspect ratio (see FAILED_PHOTO_AR
+    // above) instead of aspect-fitting it — every photo then reads as the
+    // same size on the page regardless of the phone's original orientation.
+    f._photoCovers = [];
     for (const photoUrl of (f.photos || [])) {
-      const dims = await new Promise(res => {
-        const pi = new Image();
-        pi.onload = () => res({ w: pi.naturalWidth, h: pi.naturalHeight });
-        pi.onerror = () => res({ w: 1, h: 1 });
-        pi.src = photoUrl;
-      });
-      f._photoSizes.push(dims);
+      try {
+        const pi = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = photoUrl; });
+        const targetW = 1000, targetH = Math.round(targetW / FAILED_PHOTO_AR);
+        const pc = document.createElement('canvas');
+        pc.width = targetW; pc.height = targetH;
+        const pctx = pc.getContext('2d');
+        const srcAR = pi.naturalWidth / pi.naturalHeight, boxAR = targetW / targetH;
+        let cw, ch, cx0, cy0;
+        if (srcAR > boxAR) { ch = pi.naturalHeight; cw = ch*boxAR; cy0 = 0; cx0 = (pi.naturalWidth-cw)/2; }
+        else { cw = pi.naturalWidth; ch = cw/boxAR; cx0 = 0; cy0 = (pi.naturalHeight-ch)/2; }
+        pctx.drawImage(pi, cx0, cy0, cw, ch, 0, 0, targetW, targetH);
+        f._photoCovers.push(pc.toDataURL('image/jpeg', 0.9));
+      } catch(e) { /* skip unreadable photo */ }
     }
   }
 
@@ -5395,47 +5411,102 @@ async function generateFieldReport(payload) {
   doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
   doc.text(`Project: ${projectName||'—'}  ·  Inspector: ${inspector||'—'}  ·  Date: ${today}`, M+5, M+16);
 
-  // Stat boxes
+  // Stat cards — white with a colored left accent bar instead of a solid
+  // color fill, softer and more modern-looking.
   const statY = M+24, statW = (PW-M*2)/4, statH = 28;
   const statDefs = [
-    { label:'PASSED',      val:passed,  bg:[220,252,231], fg:[22,163,74]  },
-    { label:'FAILED',      val:failed,  bg:[254,226,226], fg:[220,38,38]  },
-    { label:'NOT REVIEWED',val:notDone, bg:[243,244,246], fg:[100,116,139]},
-    { label:'PASS RATE',   val:passPct+'%', bg:[239,246,255], fg:[37,99,235]},
+    { label:'PASSED',       val:passed,      fg:[22,163,74]  },
+    { label:'FAILED',       val:failed,      fg:[220,38,38]  },
+    { label:'NOT REVIEWED', val:notDone,     fg:[100,116,139]},
+    { label:'PASS RATE',    val:passPct+'%', fg:[37,99,235]  },
   ];
   statDefs.forEach((s,i) => {
-    const x = M + i*(statW);
-    doc.setFillColor(...s.bg); doc.roundedRect(x, statY, statW-3, statH, 2,2,'F');
-    doc.setTextColor(...s.fg); doc.setFont('helvetica','bold'); doc.setFontSize(22);
-    doc.text(String(s.val), x+statW/2-1.5, statY+17, {align:'center'});
-    doc.setFontSize(7); doc.text(s.label, x+statW/2-1.5, statY+24, {align:'center'});
+    const x = M + i*statW, w = statW-3;
+    doc.setFillColor(250,251,253); doc.roundedRect(x, statY, w, statH, 2.5,2.5,'F');
+    doc.setDrawColor(228,232,240); doc.setLineWidth(0.3); doc.roundedRect(x, statY, w, statH, 2.5,2.5,'S');
+    doc.setFillColor(...s.fg); doc.roundedRect(x, statY, 1.4, statH, 0.7,0.7,'F');
+    doc.setTextColor(...s.fg); doc.setFont('helvetica','bold'); doc.setFontSize(23);
+    doc.text(String(s.val), x+w/2+0.5, statY+17, {align:'center'});
+    doc.setTextColor(100,110,130); doc.setFontSize(6.5);
+    doc.text(s.label, x+w/2+0.5, statY+24, {align:'center'});
   });
 
-  // Drawing overview with dots
+  // Drawing overview with markers — failed ones drawn last (on top) and
+  // bigger, so they're the first thing you notice when scanning the sheet.
   const ovY = statY+statH+6, ovH = PH-ovY-M, ovW = PW-M*2;
   const imgAR = NW/NH, boxAR = ovW/ovH;
   let iw, ih;
   if(imgAR>boxAR){ iw=ovW; ih=ovW/imgAR; } else { ih=ovH; iw=ovH*imgAR; }
   const ix=M+(ovW-iw)/2, iy=ovY+(ovH-ih)/2;
   doc.addImage(payload.imageDataUrl,'JPEG',ix,iy,iw,ih);
-  // Draw finding dots
-  payload.findings.forEach((f,i) => {
+  const findingsByPriority = [
+    ...payload.findings.map((f,i)=>({f,i})).filter(o=>o.f.status!=='fail'),
+    ...payload.findings.map((f,i)=>({f,i})).filter(o=>o.f.status==='fail'),
+  ];
+  findingsByPriority.forEach(({f,i}) => {
     const dx = ix + f.xPct*iw, dy = iy + f.yPct*ih;
-    const [r,g,b] = f.status==='pass'?[22,163,74]:f.status==='fail'?[220,38,38]:[150,150,150];
-    doc.setFillColor(r,g,b); doc.circle(dx, dy, 2.2,'F');
-    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(4.5);
-    doc.text(String(i+1), dx, dy+1.2, {align:'center'});
+    const isFail = f.status==='fail';
+    const [r,g,b] = f.status==='pass'?[22,163,74]:isFail?[220,38,38]:[150,150,150];
+    const rad = isFail ? 3.2 : 1.8;
+    doc.setFillColor(r,g,b); doc.circle(dx, dy, rad,'F');
+    doc.setDrawColor(255,255,255); doc.setLineWidth(isFail?0.5:0.3); doc.circle(dx,dy,rad,'S');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(isFail?5.5:4);
+    doc.text(String(i+1), dx, dy+(isFail?1.5:1.2), {align:'center'});
   });
 
-  // ── Page 2: Type/item pass-fail summary, always shown ──
+  // ── Failed Items Locator — a lookup table so you can go straight to a
+  // failure's page instead of hunting through the whole report for it. ──
+  const typeInfo = payload.typeInfo || {};
+  const typeKeys = Object.keys(typeInfo);
+  const hasSummaryPage = typeKeys.length > 0 && typeof doc.autoTable === 'function';
+  const typesWithQuestions = typeKeys.filter(k => (typeInfo[k].questions||[]).length > 0);
+  const hasChecklistPage = hasSummaryPage && typesWithQuestions.length > 0;
+  const failedFindings = payload.findings.map((f,i)=>({f,i})).filter(o=>o.f.status==='fail');
+  const hasLocatorPage = failedFindings.length > 0 && typeof doc.autoTable === 'function';
+
+  let pageCursor = 1; // cover page
+  if (hasLocatorPage)   pageCursor++;
+  if (hasSummaryPage)   pageCursor++;
+  if (hasChecklistPage) pageCursor++;
+  const FAIL_COLS = 2, FAIL_ROWS = 1, FAIL_PER_PAGE = FAIL_COLS*FAIL_ROWS;
+  const failedPageStart = pageCursor + 1;
+  const failedPageOf = idxInFailedArr => failedPageStart + Math.floor(idxInFailedArr/FAIL_PER_PAGE);
+
+  if (hasLocatorPage) {
+    doc.addPage();
+    doc.setFillColor(220,38,38);
+    doc.roundedRect(M, M, PW-M*2, 14, 2,2,'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+    doc.text(`FAILED ITEMS — ${failedFindings.length} TO LOCATE`, M+4, M+9.5);
+
+    doc.autoTable({
+      startY: M+18,
+      head: [['#','Item','Notes','Page']],
+      body: failedFindings.map((o, idx) => [
+        String(o.i+1),
+        (o.f.label || 'Match #'+(o.i+1)),
+        o.f.notes ? (o.f.notes.length>60?o.f.notes.slice(0,57)+'…':o.f.notes) : '—',
+        String(failedPageOf(idx)),
+      ]),
+      styles:{ fontSize:9, cellPadding:3.5, valign:'middle' },
+      headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:9 },
+      columnStyles:{
+        0:{ cellWidth:12, halign:'center', fontStyle:'bold', textColor:[220,38,38] },
+        1:{ cellWidth:'auto', fontStyle:'bold' },
+        2:{ cellWidth:110, textColor:[90,100,120] },
+        3:{ cellWidth:22, halign:'center', fontStyle:'bold' },
+      },
+      margin:{ top:M, left:M, right:M },
+      alternateRowStyles:{ fillColor:[254,242,242] },
+    });
+  }
+
+  // ── Page: Type/item pass-fail summary, always shown ──
   // Then, ONLY if real AI-generated questions actually exist somewhere,
   // a separate checklist page for those specific types. A type with no
   // questions no longer gets an empty "No inspection questions defined"
   // placeholder row at all -- it just doesn't appear in that section.
-  const typeInfo = payload.typeInfo || {};
-  const typeKeys = Object.keys(typeInfo);
-
-  if (typeKeys.length > 0 && typeof doc.autoTable === 'function') {
+  if (hasSummaryPage) {
     doc.addPage();
     doc.setFillColor(15,39,68);
     doc.rect(M, M, PW-M*2, 14, 'F');
@@ -5473,8 +5544,7 @@ async function generateFieldReport(payload) {
     });
 
     // ── Inspection questions checklist — only if some type actually has any ──
-    const typesWithQuestions = typeKeys.filter(k => (typeInfo[k].questions||[]).length > 0);
-    if (typesWithQuestions.length > 0) {
+    if (hasChecklistPage) {
       doc.addPage();
       doc.setFillColor(15,39,68);
       doc.rect(M, M, PW-M*2, 14, 'F');
@@ -5538,102 +5608,125 @@ async function generateFieldReport(payload) {
     }
   }
 
-  // ── Finding cards — 3 cols × 2 rows = 6 per page ──
-  const COLS=3, ROWS=2;
-  const GAP=4;
-  const cardW=(PW-M*2-(COLS-1)*GAP)/COLS;
-  const cardH=(PH-M*2-(ROWS-1)*GAP)/ROWS;
+  // ── Failed items — the priority section: 2 big cards per page, full
+  // notes, drawing + photo shown at real size instead of squeezed in with
+  // everything else. This is deliberately much bigger than the passed
+  // section below it. ──
+  if (failedFindings.length > 0) {
+    const GAP = 6;
+    const cardW = (PW-M*2-(FAIL_COLS-1)*GAP)/FAIL_COLS;
+    const cardH = PH-M*2-14; // leaves room for the section header bar
 
-  doc.addPage();
-  let ci=0;
-  for(const [i,f] of payload.findings.entries()) {
-    if(ci>0 && ci%(COLS*ROWS)===0) doc.addPage();
-    const col = ci%COLS, row = Math.floor((ci%(COLS*ROWS))/COLS);
-    const cx2 = M + col*(cardW+GAP), cy2 = M + row*(cardH+GAP);
+    doc.addPage();
+    let ci = 0;
+    for (const o of failedFindings) {
+      const f = o.f, i = o.i;
+      if (ci>0 && ci%FAIL_PER_PAGE===0) doc.addPage();
+      if (ci%FAIL_PER_PAGE===0) {
+        doc.setFillColor(220,38,38); doc.roundedRect(M,M,PW-M*2,10,2,2,'F');
+        doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+        doc.text('FAILED ITEMS', M+4, M+7);
+      }
+      const col = ci%FAIL_COLS;
+      const cx2 = M + col*(cardW+GAP), cy2 = M+14;
 
-    // Card bg
-    doc.setFillColor(248,250,252); doc.roundedRect(cx2,cy2,cardW,cardH,2,2,'F');
-    doc.setDrawColor(220,226,239); doc.setLineWidth(0.25);
-    doc.roundedRect(cx2,cy2,cardW,cardH,2,2,'S');
+      doc.setFillColor(255,247,247); doc.roundedRect(cx2,cy2,cardW,cardH,3,3,'F');
+      doc.setDrawColor(248,180,180); doc.setLineWidth(0.4); doc.roundedRect(cx2,cy2,cardW,cardH,3,3,'S');
 
-    // Status bar
-    const [sr,sg,sb] = f.status==='pass'?[22,163,74]:f.status==='fail'?[220,38,38]:[160,160,160];
-    doc.setFillColor(sr,sg,sb);
-    doc.roundedRect(cx2,cy2,cardW,9,2,2,'F');
-    doc.rect(cx2,cy2+5,cardW,4,'F');
-    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8);
-    // Plain text only, no ✓/✗/○ glyphs — jsPDF's standard Helvetica font uses
-    // WinAnsi encoding, which doesn't include those symbols. They rendered as
-    // garbled mojibake ("%Ë  NOT REVIEWED") instead of an actual checkmark —
-    // the colored bar itself already conveys pass/fail/not-reviewed.
-    const statusTxt = f.status==='pass'?'PASS':f.status==='fail'?'FAIL':'NOT REVIEWED';
-    doc.text(`#${i+1}  ${statusTxt}`, cx2+3, cy2+6);
+      doc.setTextColor(185,28,28); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+      const lbl = f.label||'Match #'+(i+1);
+      doc.text(`#${i+1}  ${lbl}`, cx2+4, cy2+8);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(150,60,60);
+      doc.text('Confidence: '+f.score+'%', cx2+4, cy2+13);
 
-    // Label + score row
-    const headerH = 9;
-    const labelY = cy2 + headerH + 5;
-    doc.setTextColor(26,34,52); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
-    const lbl = (f.label||'Match #'+(i+1));
-    doc.text(lbl.length>32?lbl.slice(0,29)+'…':lbl, cx2+3, labelY);
-    doc.setFont('helvetica','normal'); doc.setFontSize(6); doc.setTextColor(90,100,120);
-    doc.text('Confidence: '+f.score+'%', cx2+3, labelY+5);
+      const notesY = cy2+18;
+      let notesH = 0;
+      if (f.notes) {
+        doc.setTextColor(80,40,40); doc.setFont('helvetica','italic'); doc.setFontSize(7.5);
+        const noteLines = doc.splitTextToSize(f.notes, cardW-8);
+        doc.text(noteLines.slice(0,3), cx2+4, notesY);
+        notesH = Math.min(noteLines.length,3)*3.5 + 3;
+      }
 
-    // Notes (below label, before images)
-    const notesH = f.notes ? 8 : 0;
-    const notesY = labelY + 7;
-    if(f.notes) {
-      doc.setTextColor(50,60,80); doc.setFont('helvetica','italic'); doc.setFontSize(6);
-      const note = f.notes.length>80?f.notes.slice(0,77)+'…':f.notes;
-      const noteLines = doc.splitTextToSize(note, cardW-6);
-      doc.text(noteLines.slice(0,2), cx2+3, notesY+3);
-    }
-
-    // ── Image area: two columns side by side ──
-    const imgAreaY = notesY + notesH + 2;
-    const imgAreaH = cardH - (imgAreaY - cy2) - 2;
-    const hasPhoto = f.photos && f.photos.length > 0;
-
-    if (hasPhoto) {
-      // Split: drawing crop left (48%), field photo right (48%), gap 4%
-      const colGap = 2;
-      const halfW = (cardW - 4 - colGap) / 2;
-
-      // Left: drawing crop label + image
-      doc.setFontSize(5.5); doc.setFont('helvetica','bold'); doc.setTextColor(140,150,170);
-      doc.text('DRAWING', cx2+2, imgAreaY+4);
-      const cropBoxY = imgAreaY + 6;
-      const cropBoxH = imgAreaH - 6;
-      if(f._crop) doc.addImage(f._crop,'JPEG', cx2+2, cropBoxY, halfW, cropBoxH);
-
-      // Right: field photo label + image (aspect-ratio correct)
-      const photoColX = cx2 + 2 + halfW + colGap;
-      doc.setFontSize(5.5); doc.setFont('helvetica','bold'); doc.setTextColor(140,150,170);
-      doc.text('FIELD PHOTO', photoColX, imgAreaY+4);
-      const photoBoxY = imgAreaY + 6;
-      const photoBoxH = imgAreaH - 6;
-      try {
-        const ps = (f._photoSizes && f._photoSizes[0]) || { w: 4, h: 3 };
-        const photoAR = ps.w / ps.h;
-        let pw, ph;
-        if (photoAR > halfW / photoBoxH) { pw = halfW; ph = halfW / photoAR; }
-        else                              { ph = photoBoxH; pw = photoBoxH * photoAR; }
-        const px = photoColX + (halfW - pw) / 2;
-        const py = photoBoxY + (photoBoxH - ph) / 2;
-        doc.addImage(f.photos[0], 'JPEG', px, py, pw, ph);
-        if(f.photos.length > 1) {
-          doc.setFillColor(0,0,0,0.6); doc.setTextColor(255,255,255);
-          doc.setFontSize(5.5); doc.setFont('helvetica','bold');
-          doc.text(`+${f.photos.length-1}`, photoColX+halfW-8, photoBoxY+photoBoxH-2);
+      const imgAreaY = notesY + notesH;
+      const imgAreaH = cardH - (imgAreaY - cy2) - 4;
+      const hasPhoto = f._photoCovers && f._photoCovers.length > 0;
+      if (hasPhoto) {
+        const colGap = 3, halfW = (cardW-8-colGap)/2;
+        doc.setFontSize(6); doc.setFont('helvetica','bold'); doc.setTextColor(150,60,60);
+        doc.text('DRAWING', cx2+4, imgAreaY+3.5);
+        doc.text('FIELD PHOTO', cx2+4+halfW+colGap, imgAreaY+3.5);
+        const boxY = imgAreaY+5;
+        // Drawing crop is always a square (see pre-render loop) — placed into
+        // a square box so it's never stretched. Photo uses its own fixed
+        // aspect ratio (FAILED_PHOTO_AR), same reasoning.
+        if (f._crop) doc.addImage(f._crop,'JPEG', cx2+4, boxY, halfW, halfW);
+        const photoBoxH = halfW/FAILED_PHOTO_AR;
+        doc.addImage(f._photoCovers[0],'JPEG', cx2+4+halfW+colGap, boxY, halfW, photoBoxH);
+        if (f._photoCovers.length>1) {
+          doc.setFillColor(0,0,0); doc.setTextColor(255,255,255); doc.setFontSize(6.5); doc.setFont('helvetica','bold');
+          doc.roundedRect(cx2+4+halfW+colGap+halfW-14, boxY+photoBoxH-8, 13, 6, 1,1,'F');
+          doc.text(`+${f._photoCovers.length-1}`, cx2+4+halfW+colGap+halfW-7.5, boxY+photoBoxH-4, {align:'center'});
         }
-      } catch(e) { /* skip bad photo */ }
-
-    } else {
-      // No photo — drawing crop takes full width
-      doc.setFontSize(5.5); doc.setFont('helvetica','bold'); doc.setTextColor(140,150,170);
-      doc.text('DRAWING', cx2+2, imgAreaY+4);
-      if(f._crop) doc.addImage(f._crop,'JPEG', cx2+2, imgAreaY+6, cardW-4, imgAreaH-6);
+      } else {
+        doc.setFontSize(6); doc.setFont('helvetica','bold'); doc.setTextColor(150,60,60);
+        doc.text('DRAWING', cx2+4, imgAreaY+3.5);
+        const availW = cardW-8, availH = imgAreaH-5;
+        const sz = Math.min(availW, availH);
+        const bx = cx2+4 + (availW-sz)/2, by = imgAreaY+5 + (availH-sz)/2;
+        if (f._crop) doc.addImage(f._crop,'JPEG', bx, by, sz, sz);
+      }
+      ci++;
     }
-    ci++;
+  }
+
+  // ── Passed / Not Reviewed — a compact table, not full image cards, so
+  // this section stays small and the failed section above keeps the
+  // visual weight. Each row still gets a tiny thumbnail and its notes. ──
+  const otherFindings = payload.findings.map((f,i)=>({f,i})).filter(o=>o.f.status!=='fail');
+  if (otherFindings.length > 0 && typeof doc.autoTable === 'function') {
+    doc.addPage();
+    doc.setFillColor(15,39,68); doc.roundedRect(M,M,PW-M*2,10,2,2,'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.text('PASSED / NOT REVIEWED', M+4, M+7);
+
+    const THUMB = 10;
+    doc.autoTable({
+      startY: M+14,
+      head: [['','#','Item','Confidence','Status','Notes']],
+      body: otherFindings.map(o => [
+        '', String(o.i+1), (o.f.label||'Match #'+(o.i+1)), o.f.score+'%',
+        o.f.status==='pass'?'PASS':'NOT REVIEWED',
+        o.f.notes ? (o.f.notes.length>50?o.f.notes.slice(0,47)+'…':o.f.notes) : '—',
+      ]),
+      styles:{ fontSize:7.5, cellPadding:2, valign:'middle', minCellHeight:THUMB+2 },
+      headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:7.5 },
+      columnStyles:{
+        0:{ cellWidth:THUMB+4 },
+        1:{ cellWidth:9, halign:'center', fontStyle:'bold' },
+        2:{ cellWidth:'auto', fontStyle:'bold' },
+        3:{ cellWidth:20, halign:'center' },
+        4:{ cellWidth:24, halign:'center' },
+        5:{ cellWidth:70, textColor:[100,110,130] },
+      },
+      margin:{ top:M, left:M, right:M },
+      didParseCell(data) {
+        if (data.column.index===4 && data.row.section==='body') {
+          data.cell.styles.textColor = data.cell.raw==='PASS' ? [22,163,74] : [100,116,139];
+          data.cell.styles.fontStyle = 'bold';
+        }
+      },
+      didDrawCell(data) {
+        if (data.column.index===0 && data.row.section==='body') {
+          const o = otherFindings[data.row.index];
+          if (o && o.f._crop) {
+            const { x, y, height } = data.cell;
+            const sz = Math.min(THUMB, height-2);
+            try { doc.addImage(o.f._crop,'JPEG', x+2, y+(height-sz)/2, sz, sz); } catch(e) {}
+          }
+        }
+      },
+    });
   }
 
   doc.save('field_inspection_report.pdf');
