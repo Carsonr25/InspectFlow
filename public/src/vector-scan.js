@@ -5407,7 +5407,7 @@ async function generateFieldReport(payload) {
   doc.rect(M,M,PW-M*2,18,'F');
   doc.setTextColor(255,255,255);
   doc.setFont('helvetica','bold'); doc.setFontSize(15);
-  doc.text('QAQC FIELD INSPECTION REPORT', M+5, M+10);
+  doc.text((payload.drawingName || 'QAQC FIELD INSPECTION REPORT').toUpperCase(), M+5, M+10);
   doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
   doc.text(`Project: ${projectName||'—'}  ·  Inspector: ${inspector||'—'}  ·  Date: ${today}`, M+5, M+16);
 
@@ -5454,58 +5454,52 @@ async function generateFieldReport(payload) {
     doc.text(String(i+1), dx, dy+(isFail?1.5:1.2), {align:'center'});
   });
 
-  // ── Failed Items Locator — a lookup table so you can go straight to a
-  // failure's page instead of hunting through the whole report for it. ──
+  // Every finding is displayed the same way everywhere in this report:
+  // "{label} #{n}" — the number is part of the name, not a separate prefix.
+  const findingTitle = (f, i) => `${f.label || 'Item'} #${i+1}`;
+
   const typeInfo = payload.typeInfo || {};
   const typeKeys = Object.keys(typeInfo);
-  const hasSummaryPage = typeKeys.length > 0 && typeof doc.autoTable === 'function';
   const typesWithQuestions = typeKeys.filter(k => (typeInfo[k].questions||[]).length > 0);
-  const hasChecklistPage = hasSummaryPage && typesWithQuestions.length > 0;
+  const hasChecklistPage = typesWithQuestions.length > 0 && typeof doc.autoTable === 'function';
   const failedFindings = payload.findings.map((f,i)=>({f,i})).filter(o=>o.f.status==='fail');
   const hasLocatorPage = failedFindings.length > 0 && typeof doc.autoTable === 'function';
 
-  let pageCursor = 1; // cover page
-  if (hasLocatorPage)   pageCursor++;
-  if (hasSummaryPage)   pageCursor++;
-  if (hasChecklistPage) pageCursor++;
-  const FAIL_COLS = 2, FAIL_ROWS = 1, FAIL_PER_PAGE = FAIL_COLS*FAIL_ROWS;
-  const failedPageStart = pageCursor + 1;
-  const failedPageOf = idxInFailedArr => failedPageStart + Math.floor(idxInFailedArr/FAIL_PER_PAGE);
-
+  // ── Failed Items — a quick-glance recap of every failure by name, right
+  // after the cover. Simple on purpose: just what failed, nothing else. ──
   if (hasLocatorPage) {
     doc.addPage();
     doc.setFillColor(220,38,38);
     doc.roundedRect(M, M, PW-M*2, 14, 2,2,'F');
     doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
-    doc.text(`FAILED ITEMS — ${failedFindings.length} TO LOCATE`, M+4, M+9.5);
+    doc.text('FAILED ITEMS', M+4, M+9.5);
 
     doc.autoTable({
       startY: M+18,
-      head: [['#','Item','Notes','Page']],
-      body: failedFindings.map((o, idx) => [
-        String(o.i+1),
-        (o.f.label || 'Match #'+(o.i+1)),
-        o.f.notes ? (o.f.notes.length>60?o.f.notes.slice(0,57)+'…':o.f.notes) : '—',
-        String(failedPageOf(idx)),
-      ]),
-      styles:{ fontSize:9, cellPadding:3.5, valign:'middle' },
+      head: [['Failed Item']],
+      body: failedFindings.map(o => [findingTitle(o.f, o.i)]),
+      styles:{ fontSize:10, cellPadding:4, valign:'middle', fontStyle:'bold', textColor:[153,27,27] },
       headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:9 },
-      columnStyles:{
-        0:{ cellWidth:12, halign:'center', fontStyle:'bold', textColor:[220,38,38] },
-        1:{ cellWidth:'auto', fontStyle:'bold' },
-        2:{ cellWidth:110, textColor:[90,100,120] },
-        3:{ cellWidth:22, halign:'center', fontStyle:'bold' },
-      },
       margin:{ top:M, left:M, right:M },
       alternateRowStyles:{ fillColor:[254,242,242] },
     });
   }
 
-  // ── Page: Type/item pass-fail summary, always shown ──
-  // Then, ONLY if real AI-generated questions actually exist somewhere,
-  // a separate checklist page for those specific types. A type with no
-  // questions no longer gets an empty "No inspection questions defined"
-  // placeholder row at all -- it just doesn't appear in that section.
+  // ── Item Summary — grouped by each finding's own name (stripped of its
+  // trailing number) rather than the AI type-sort key, which is often
+  // empty/incomplete for manually-marked-up or non-AI-sorted items and
+  // was producing counts that didn't add up to the cover page's totals.
+  // Grouping by name always works and always matches. ──
+  const groupKey = label => (label || 'Item').replace(/\s*#?\d+\s*$/, '').trim() || (label || 'Item');
+  const summaryGroups = {};
+  payload.findings.forEach(f => {
+    const key = groupKey(f.label);
+    if (!summaryGroups[key]) summaryGroups[key] = [];
+    summaryGroups[key].push(f);
+  });
+  const summaryKeys = Object.keys(summaryGroups);
+  const hasSummaryPage = summaryKeys.length > 0 && typeof doc.autoTable === 'function';
+
   if (hasSummaryPage) {
     doc.addPage();
     doc.setFillColor(15,39,68);
@@ -5516,19 +5510,18 @@ async function generateFieldReport(payload) {
     doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
     doc.text(`Project: ${projectName||'—'}  ·  Inspector: ${inspector||'—'}  ·  Date: ${today}`, M+4, M+13);
 
-    const summaryRows = typeKeys.map(typeKey => {
-      const tInfo = typeInfo[typeKey];
-      const typeFindings = payload.findings.filter(f => f.typeKey === typeKey);
-      const typePassed = typeFindings.filter(f => f.status === 'pass').length;
-      const typeFailed = typeFindings.filter(f => f.status === 'fail').length;
-      const typeTotal  = typeFindings.length;
-      const passRate = typeTotal ? Math.round(typePassed/typeTotal*100) : 0;
-      return [tInfo.name, String(typeTotal), String(typePassed), String(typeFailed), String(typeTotal-typePassed-typeFailed), passRate+'%'];
+    const summaryRows = summaryKeys.map(key => {
+      const groupFindings = summaryGroups[key];
+      const groupPassed = groupFindings.filter(f => f.status === 'pass').length;
+      const groupFailed = groupFindings.filter(f => f.status === 'fail').length;
+      const groupTotal  = groupFindings.length;
+      const passRate = groupTotal ? Math.round(groupPassed/groupTotal*100) : 0;
+      return [key, String(groupTotal), String(groupPassed), String(groupFailed), String(groupTotal-groupPassed-groupFailed), passRate+'%'];
     });
 
     doc.autoTable({
       startY: M+18,
-      head:[['Item / Type','Count','Passed','Failed','Not Reviewed','Pass Rate']],
+      head:[['Item','Count','Passed','Failed','Not Reviewed','Pass Rate']],
       body: summaryRows,
       styles:{ fontSize:8.5, cellPadding:3, valign:'middle' },
       headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:8.5 },
@@ -5542,9 +5535,11 @@ async function generateFieldReport(payload) {
       },
       margin:{ top:M, left:M, right:M },
     });
+  }
 
-    // ── Inspection questions checklist — only if some type actually has any ──
-    if (hasChecklistPage) {
+  // ── Inspection questions checklist — only if some type actually has any,
+  // independent of whether the Item Summary page rendered. ──
+  if (hasChecklistPage) {
       doc.addPage();
       doc.setFillColor(15,39,68);
       doc.rect(M, M, PW-M*2, 14, 'F');
@@ -5605,79 +5600,57 @@ async function generateFieldReport(payload) {
           }
         }
       });
-    }
   }
 
-  // ── Failed items — the priority section: 2 big cards per page, full
-  // notes, drawing + photo shown at real size instead of squeezed in with
-  // everything else. This is deliberately much bigger than the passed
-  // section below it. ──
-  if (failedFindings.length > 0) {
-    const GAP = 6;
-    const cardW = (PW-M*2-(FAIL_COLS-1)*GAP)/FAIL_COLS;
-    const cardH = PH-M*2-14; // leaves room for the section header bar
-
+  // ── Failed items — one uniform row per failure. Every row is the same
+  // height with the same-size images, regardless of whether a photo is
+  // attached (previously a card's image size varied a lot depending on
+  // that, with a big empty gap when there was no photo). ──
+  if (failedFindings.length > 0 && typeof doc.autoTable === 'function') {
     doc.addPage();
-    let ci = 0;
-    for (const o of failedFindings) {
-      const f = o.f, i = o.i;
-      if (ci>0 && ci%FAIL_PER_PAGE===0) doc.addPage();
-      if (ci%FAIL_PER_PAGE===0) {
-        doc.setFillColor(220,38,38); doc.roundedRect(M,M,PW-M*2,10,2,2,'F');
-        doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
-        doc.text('FAILED ITEMS', M+4, M+7);
-      }
-      const col = ci%FAIL_COLS;
-      const cx2 = M + col*(cardW+GAP), cy2 = M+14;
+    doc.setFillColor(220,38,38); doc.roundedRect(M,M,PW-M*2,10,2,2,'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.text('FAILED ITEMS', M+4, M+7);
 
-      doc.setFillColor(255,247,247); doc.roundedRect(cx2,cy2,cardW,cardH,3,3,'F');
-      doc.setDrawColor(248,180,180); doc.setLineWidth(0.4); doc.roundedRect(cx2,cy2,cardW,cardH,3,3,'S');
-
-      doc.setTextColor(185,28,28); doc.setFont('helvetica','bold'); doc.setFontSize(11);
-      const lbl = f.label||'Match #'+(i+1);
-      doc.text(`#${i+1}  ${lbl}`, cx2+4, cy2+8);
-      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(150,60,60);
-      doc.text('Confidence: '+f.score+'%', cx2+4, cy2+13);
-
-      const notesY = cy2+18;
-      let notesH = 0;
-      if (f.notes) {
-        doc.setTextColor(80,40,40); doc.setFont('helvetica','italic'); doc.setFontSize(7.5);
-        const noteLines = doc.splitTextToSize(f.notes, cardW-8);
-        doc.text(noteLines.slice(0,3), cx2+4, notesY);
-        notesH = Math.min(noteLines.length,3)*3.5 + 3;
-      }
-
-      const imgAreaY = notesY + notesH;
-      const imgAreaH = cardH - (imgAreaY - cy2) - 4;
-      const hasPhoto = f._photoCovers && f._photoCovers.length > 0;
-      if (hasPhoto) {
-        const colGap = 3, halfW = (cardW-8-colGap)/2;
-        doc.setFontSize(6); doc.setFont('helvetica','bold'); doc.setTextColor(150,60,60);
-        doc.text('DRAWING', cx2+4, imgAreaY+3.5);
-        doc.text('FIELD PHOTO', cx2+4+halfW+colGap, imgAreaY+3.5);
-        const boxY = imgAreaY+5;
-        // Drawing crop is always a square (see pre-render loop) — placed into
-        // a square box so it's never stretched. Photo uses its own fixed
-        // aspect ratio (FAILED_PHOTO_AR), same reasoning.
-        if (f._crop) doc.addImage(f._crop,'JPEG', cx2+4, boxY, halfW, halfW);
-        const photoBoxH = halfW/FAILED_PHOTO_AR;
-        doc.addImage(f._photoCovers[0],'JPEG', cx2+4+halfW+colGap, boxY, halfW, photoBoxH);
-        if (f._photoCovers.length>1) {
-          doc.setFillColor(0,0,0); doc.setTextColor(255,255,255); doc.setFontSize(6.5); doc.setFont('helvetica','bold');
-          doc.roundedRect(cx2+4+halfW+colGap+halfW-14, boxY+photoBoxH-8, 13, 6, 1,1,'F');
-          doc.text(`+${f._photoCovers.length-1}`, cx2+4+halfW+colGap+halfW-7.5, boxY+photoBoxH-4, {align:'center'});
+    const IMG = 28; // fixed square size every drawing crop is placed at
+    const PHOTO_W = IMG * FAILED_PHOTO_AR;
+    doc.autoTable({
+      startY: M+14,
+      head: [['Drawing','Photo','Item','Notes']],
+      body: failedFindings.map(o => [
+        '', '', findingTitle(o.f, o.i),
+        o.f.notes ? (o.f.notes.length>140 ? o.f.notes.slice(0,137)+'…' : o.f.notes) : '—',
+      ]),
+      styles:{ fontSize:9, cellPadding:3, valign:'middle', minCellHeight:IMG+6 },
+      headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:8.5 },
+      columnStyles:{
+        0:{ cellWidth:IMG+6 },
+        1:{ cellWidth:PHOTO_W+6 },
+        2:{ cellWidth:48, fontStyle:'bold', textColor:[185,28,28] },
+        3:{ cellWidth:'auto', textColor:[80,80,90] },
+      },
+      margin:{ top:M, left:M, right:M },
+      alternateRowStyles:{ fillColor:[255,247,247] },
+      didDrawCell(data) {
+        if (data.row.section!=='body') return;
+        const o = failedFindings[data.row.index];
+        if (!o) return;
+        const { x, y, height } = data.cell;
+        // Drawing crop is always rendered square (see pre-render loop) —
+        // placed into a square box here so it's never stretched.
+        if (data.column.index===0 && o.f._crop) {
+          try { doc.addImage(o.f._crop,'JPEG', x+3, y+(height-IMG)/2, IMG, IMG); } catch(e) {}
+        } else if (data.column.index===1 && o.f._photoCovers && o.f._photoCovers.length>0) {
+          try {
+            doc.addImage(o.f._photoCovers[0],'JPEG', x+3, y+(height-IMG)/2, PHOTO_W, IMG);
+            if (o.f._photoCovers.length>1) {
+              doc.setFillColor(0,0,0); doc.setTextColor(255,255,255); doc.setFontSize(6); doc.setFont('helvetica','bold');
+              doc.text(`+${o.f._photoCovers.length-1}`, x+3+PHOTO_W-7, y+(height-IMG)/2+IMG-2);
+            }
+          } catch(e) {}
         }
-      } else {
-        doc.setFontSize(6); doc.setFont('helvetica','bold'); doc.setTextColor(150,60,60);
-        doc.text('DRAWING', cx2+4, imgAreaY+3.5);
-        const availW = cardW-8, availH = imgAreaH-5;
-        const sz = Math.min(availW, availH);
-        const bx = cx2+4 + (availW-sz)/2, by = imgAreaY+5 + (availH-sz)/2;
-        if (f._crop) doc.addImage(f._crop,'JPEG', bx, by, sz, sz);
-      }
-      ci++;
-    }
+      },
+    });
   }
 
   // ── Passed / Not Reviewed — a compact table, not full image cards, so
@@ -5693,9 +5666,9 @@ async function generateFieldReport(payload) {
     const THUMB = 10;
     doc.autoTable({
       startY: M+14,
-      head: [['','#','Item','Confidence','Status','Notes']],
+      head: [['','Item','Status','Notes']],
       body: otherFindings.map(o => [
-        '', String(o.i+1), (o.f.label||'Match #'+(o.i+1)), o.f.score+'%',
+        '', findingTitle(o.f, o.i),
         o.f.status==='pass'?'PASS':'NOT REVIEWED',
         o.f.notes ? (o.f.notes.length>50?o.f.notes.slice(0,47)+'…':o.f.notes) : '—',
       ]),
@@ -5703,15 +5676,13 @@ async function generateFieldReport(payload) {
       headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:7.5 },
       columnStyles:{
         0:{ cellWidth:THUMB+4 },
-        1:{ cellWidth:9, halign:'center', fontStyle:'bold' },
-        2:{ cellWidth:'auto', fontStyle:'bold' },
-        3:{ cellWidth:20, halign:'center' },
-        4:{ cellWidth:24, halign:'center' },
-        5:{ cellWidth:70, textColor:[100,110,130] },
+        1:{ cellWidth:'auto', fontStyle:'bold' },
+        2:{ cellWidth:24, halign:'center' },
+        3:{ cellWidth:80, textColor:[100,110,130] },
       },
       margin:{ top:M, left:M, right:M },
       didParseCell(data) {
-        if (data.column.index===4 && data.row.section==='body') {
+        if (data.column.index===2 && data.row.section==='body') {
           data.cell.styles.textColor = data.cell.raw==='PASS' ? [22,163,74] : [100,116,139];
           data.cell.styles.fontStyle = 'bold';
         }
