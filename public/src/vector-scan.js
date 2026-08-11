@@ -5465,31 +5465,12 @@ async function generateFieldReport(payload) {
   const failedFindings = payload.findings.map((f,i)=>({f,i})).filter(o=>o.f.status==='fail');
   const hasLocatorPage = failedFindings.length > 0 && typeof doc.autoTable === 'function';
 
-  // ── Failed Items — a quick-glance recap of every failure by name, right
-  // after the cover. Simple on purpose: just what failed, nothing else. ──
-  if (hasLocatorPage) {
-    doc.addPage();
-    doc.setFillColor(220,38,38);
-    doc.roundedRect(M, M, PW-M*2, 14, 2,2,'F');
-    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
-    doc.text('FAILED ITEMS', M+4, M+9.5);
-
-    doc.autoTable({
-      startY: M+18,
-      head: [['Failed Item']],
-      body: failedFindings.map(o => [findingTitle(o.f, o.i)]),
-      styles:{ fontSize:10, cellPadding:4, valign:'middle', fontStyle:'bold', textColor:[153,27,27] },
-      headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:9 },
-      margin:{ top:M, left:M, right:M },
-      alternateRowStyles:{ fillColor:[254,242,242] },
-    });
-  }
-
-  // ── Item Summary — grouped by each finding's own name (stripped of its
-  // trailing number) rather than the AI type-sort key, which is often
-  // empty/incomplete for manually-marked-up or non-AI-sorted items and
-  // was producing counts that didn't add up to the cover page's totals.
-  // Grouping by name always works and always matches. ──
+  // Grouped by each finding's own name (stripped of its trailing number)
+  // rather than the AI type-sort key, which is often empty/incomplete for
+  // manually-marked-up or non-AI-sorted items and was producing counts
+  // that didn't add up to the cover page's totals. Grouping by name always
+  // works and always matches — it's also the closest thing to a "type"
+  // every finding actually has, AI-sorted or not.
   const groupKey = label => (label || 'Item').replace(/\s*#?\d+\s*$/, '').trim() || (label || 'Item');
   const summaryGroups = {};
   payload.findings.forEach(f => {
@@ -5500,41 +5481,65 @@ async function generateFieldReport(payload) {
   const summaryKeys = Object.keys(summaryGroups);
   const hasSummaryPage = summaryKeys.length > 0 && typeof doc.autoTable === 'function';
 
-  if (hasSummaryPage) {
+  // ── Failed Items + Item Summary share one page: a quick recap of every
+  // failure by name, then the breakdown by type right below it. ──
+  if (hasLocatorPage || hasSummaryPage) {
     doc.addPage();
-    doc.setFillColor(15,39,68);
-    doc.rect(M, M, PW-M*2, 14, 'F');
-    doc.setTextColor(255,255,255);
-    doc.setFont('helvetica','bold'); doc.setFontSize(12);
-    doc.text('ITEM SUMMARY', M+4, M+9);
-    doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
-    doc.text(`Project: ${projectName||'—'}  ·  Inspector: ${inspector||'—'}  ·  Date: ${today}`, M+4, M+13);
+    let cursorY = M;
 
-    const summaryRows = summaryKeys.map(key => {
-      const groupFindings = summaryGroups[key];
-      const groupPassed = groupFindings.filter(f => f.status === 'pass').length;
-      const groupFailed = groupFindings.filter(f => f.status === 'fail').length;
-      const groupTotal  = groupFindings.length;
-      const passRate = groupTotal ? Math.round(groupPassed/groupTotal*100) : 0;
-      return [key, String(groupTotal), String(groupPassed), String(groupFailed), String(groupTotal-groupPassed-groupFailed), passRate+'%'];
-    });
+    if (hasLocatorPage) {
+      doc.setFillColor(220,38,38);
+      doc.roundedRect(M, cursorY, PW-M*2, 14, 2,2,'F');
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+      doc.text('FAILED ITEMS', M+4, cursorY+9.5);
 
-    doc.autoTable({
-      startY: M+18,
-      head:[['Item','Count','Passed','Failed','Not Reviewed','Pass Rate']],
-      body: summaryRows,
-      styles:{ fontSize:8.5, cellPadding:3, valign:'middle' },
-      headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:8.5 },
-      columnStyles:{
-        0:{ cellWidth:'auto', fontStyle:'bold' },
-        1:{ cellWidth:22, halign:'center' },
-        2:{ cellWidth:26, halign:'center', textColor:[22,163,74] },
-        3:{ cellWidth:26, halign:'center', textColor:[220,38,38] },
-        4:{ cellWidth:30, halign:'center', textColor:[100,116,139] },
-        5:{ cellWidth:26, halign:'center', fontStyle:'bold' },
-      },
-      margin:{ top:M, left:M, right:M },
-    });
+      doc.autoTable({
+        startY: cursorY+18,
+        head: [['Failed Item']],
+        body: failedFindings.map(o => [findingTitle(o.f, o.i)]),
+        styles:{ fontSize:10, cellPadding:4, valign:'middle', fontStyle:'bold', textColor:[153,27,27] },
+        headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:9 },
+        margin:{ top:M, left:M, right:M },
+        alternateRowStyles:{ fillColor:[254,242,242] },
+      });
+      cursorY = doc.lastAutoTable.finalY + 10;
+    }
+
+    if (hasSummaryPage) {
+      doc.setFillColor(15,39,68);
+      doc.rect(M, cursorY, PW-M*2, 14, 'F');
+      doc.setTextColor(255,255,255);
+      doc.setFont('helvetica','bold'); doc.setFontSize(12);
+      doc.text('ITEM SUMMARY — BY TYPE', M+4, cursorY+9);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+      doc.text(`Project: ${projectName||'—'}  ·  Inspector: ${inspector||'—'}  ·  Date: ${today}`, M+4, cursorY+13);
+
+      const summaryRows = summaryKeys.map(key => {
+        const groupFindings = summaryGroups[key];
+        const groupPassed = groupFindings.filter(f => f.status === 'pass').length;
+        const groupFailed = groupFindings.filter(f => f.status === 'fail').length;
+        const groupTotal  = groupFindings.length;
+        const passRate = groupTotal ? Math.round(groupPassed/groupTotal*100) : 0;
+        return [key, String(groupTotal), String(groupPassed), String(groupFailed), String(groupTotal-groupPassed-groupFailed), passRate+'%'];
+      });
+
+      doc.autoTable({
+        startY: cursorY+18,
+        head:[['Type','Count','Passed','Failed','Not Reviewed','Pass Rate']],
+        body: summaryRows,
+        styles:{ fontSize:8.5, cellPadding:3, valign:'middle' },
+        headStyles:{ fillColor:[26,26,26], textColor:[255,255,255], fontStyle:'bold', fontSize:8.5 },
+        columnStyles:{
+          0:{ cellWidth:'auto', fontStyle:'bold' },
+          1:{ cellWidth:22, halign:'center' },
+          2:{ cellWidth:26, halign:'center', textColor:[22,163,74] },
+          3:{ cellWidth:26, halign:'center', textColor:[220,38,38] },
+          4:{ cellWidth:30, halign:'center', textColor:[100,116,139] },
+          5:{ cellWidth:26, halign:'center', fontStyle:'bold' },
+        },
+        margin:{ top:M, left:M, right:M },
+      });
+    }
   }
 
   // ── Inspection questions checklist — only if some type actually has any,
